@@ -20,7 +20,7 @@ struct SearchLimits {
 // Each technique can be switched off at runtime (UCI options) for SPRT tests and ablation.
 struct SearchFeatures {
     bool null_move = true;
-    bool lmr = false;
+    bool lmr = true;
     bool rfp = false;
     bool razoring = false;
     bool futility = false;
