@@ -32,6 +32,9 @@ const Toggle TOGGLES[] = {
     {"Futility", &Features.futility},        {"LMP", &Features.lmp},
     {"Aspiration", &Features.aspiration},    {"CheckExtension", &Features.check_ext},
     {"SEEPruning", &Features.see_pruning},   {"CounterMoves", &Features.counter_moves},
+    {"EvalMobility", &EvalTerms.mobility},   {"EvalPawnStructure", &EvalTerms.pawn_structure},
+    {"EvalPassedPawns", &EvalTerms.passed_pawns}, {"EvalKingSafety", &EvalTerms.king_safety},
+    {"EvalRookFiles", &EvalTerms.rook_files},
 };
 
 std::string lower(std::string s) {

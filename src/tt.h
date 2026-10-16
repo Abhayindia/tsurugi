@@ -29,6 +29,7 @@ public:
     void new_search() { generation_ = (generation_ + 4) & 0xFC; }
 
     bool probe(U64 key, TTEntry& out) const;
+    void prefetch(U64 key) const { __builtin_prefetch(&table_[index(key)]); }
     void store(U64 key, Move move, Value score, Value eval, int depth, Bound bound);
     int hashfull() const;
 

@@ -236,6 +236,7 @@ Value Searcher::qsearch(Position& pos, Value alpha, Value beta, int ply) {
         stack_[ply].current = m;
         stack_[ply].moved = pos.piece_on(from_sq(m));
         pos.make_move(m);
+        TT.prefetch(pos.key());
         Value v = -qsearch(pos, -beta, -alpha, ply + 1);
         pos.unmake_move(m);
         if (stop_.load(std::memory_order_relaxed)) return 0;
@@ -349,6 +350,7 @@ Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int p
         stack_[ply].current = m;
         stack_[ply].moved = pos.piece_on(from_sq(m));
         pos.make_move(m);
+        TT.prefetch(pos.key());
         bool gives_check = pos.in_check();
         int new_depth = depth - 1 + (Features.check_ext && gives_check ? 1 : 0);
 

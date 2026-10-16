@@ -75,6 +75,13 @@ void init_magics(Magic* magics, U64* table, const int dirs[4][2]) {
             sub = (sub - m.mask) & m.mask;
         } while (sub);
 
+#if defined(TSURUGI_PEXT)
+        for (int i = 0; i < size; ++i) m.table[m.index(occs[i])] = refs[i];
+        (void)rng;
+        (void)attempt;
+        next_table += size;
+        continue;
+#endif
         for (;;) {
             m.magic = rng.sparse();
             if (popcount((m.mask * m.magic) >> 56) < 6) continue;

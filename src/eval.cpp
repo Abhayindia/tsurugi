@@ -49,8 +49,13 @@ void build_psts() {
 
 }  // namespace
 
+namespace {
+void init_masks();
+}
+
 void init_eval() {
     build_psts();
+    init_masks();
     for (int pt = PAWN; pt <= KING; ++pt) {
         for (int s = 0; s < 64; ++s) {
             Score w = {MG_VALUE[pt] + pst[pt][s].mg, EG_VALUE[pt] + pst[pt][s].eg};
@@ -60,8 +65,125 @@ void init_eval() {
     }
 }
 
+namespace {
+
+U64 adjacent_files[8];
+U64 passed_mask[COLOR_NB][SQUARE_NB];
+
+constexpr Score MOBILITY_WEIGHT[PIECE_TYPE_NB] = {{0, 0}, {4, 4}, {5, 5}, {2, 4}, {1, 2}, {0, 0}};
+constexpr int MOBILITY_CENTER[PIECE_TYPE_NB] = {0, 4, 6, 6, 12, 0};
+constexpr int KING_ATTACK_WEIGHT[PIECE_TYPE_NB] = {0, 2, 2, 3, 5, 0};
+constexpr Score DOUBLED = {-10, -20};
+constexpr Score ISOLATED = {-10, -12};
+constexpr int PASSED_MG[8] = {0, 5, 10, 15, 25, 40, 60, 0};
+constexpr int PASSED_EG[8] = {0, 10, 15, 25, 45, 75, 110, 0};
+constexpr Score ROOK_OPEN = {25, 10};
+constexpr Score ROOK_SEMI_OPEN = {12, 6};
+
+void add(Score& s, Score t, int n = 1) {
+    s.mg += t.mg * n;
+    s.eg += t.eg * n;
+}
+
+void init_masks() {
+    for (int f = 0; f < 8; ++f) {
+        adjacent_files[f] = 0;
+        if (f > 0) adjacent_files[f] |= FILE_A_BB << (f - 1);
+        if (f < 7) adjacent_files[f] |= FILE_A_BB << (f + 1);
+    }
+    for (int s = 0; s < 64; ++s) {
+        U64 files = adjacent_files[file_of(s)] | (FILE_A_BB << file_of(s));
+        U64 ahead_w = 0, ahead_b = 0;
+        for (int r = rank_of(s) + 1; r < 8; ++r) ahead_w |= RANK_1_BB << (8 * r);
+        for (int r = rank_of(s) - 1; r >= 0; --r) ahead_b |= RANK_1_BB << (8 * r);
+        passed_mask[WHITE][s] = files & ahead_w;
+        passed_mask[BLACK][s] = files & ahead_b;
+    }
+}
+
+U64 pawn_attacks(const Position& pos, Color c) {
+    U64 p = pos.pieces(c, PAWN);
+    U64 up = c == WHITE ? p << 8 : p >> 8;
+    return shift_east(up) | shift_west(up);
+}
+
+Score eval_side(const Position& pos, Color c) {
+    Score s;
+    Color them = ~c;
+    U64 occ = pos.pieces();
+    U64 own_pawns = pos.pieces(c, PAWN), their_pawns = pos.pieces(them, PAWN);
+
+    if (EvalTerms.mobility || EvalTerms.king_safety) {
+        U64 area = ~pos.pieces(c) & ~pawn_attacks(pos, them);
+        int ksq = pos.king_sq(them);
+        U64 zone = attacks::king[ksq] | bb(ksq);
+        int units = 0, attackers = 0;
+        for (int pt = KNIGHT; pt <= QUEEN; ++pt) {
+            U64 b = pos.pieces(c, PieceType(pt));
+            while (b) {
+                U64 a = attacks::piece(PieceType(pt), pop_lsb(b), occ);
+                if (EvalTerms.mobility) add(s, MOBILITY_WEIGHT[pt], popcount(a & area) - MOBILITY_CENTER[pt]);
+                if (a & zone) {
+                    ++attackers;
+                    units += KING_ATTACK_WEIGHT[pt] * popcount(a & zone);
+                }
+            }
+        }
+        if (EvalTerms.king_safety) {
+            if (attackers >= 2) s.mg += std::min(units * units * 3 / 2, 400);
+            int own_k = pos.king_sq(c);
+            int kf = file_of(own_k), dir = c == WHITE ? 8 : -8;
+            for (int f = std::max(kf - 1, 0); f <= std::min(kf + 1, 7); ++f) {
+                int s1 = own_k + (f - kf) + dir, s2 = s1 + dir;
+                if (s1 >= 0 && s1 < 64 && (own_pawns & bb(s1))) s.mg += 12;
+                else if (s2 >= 0 && s2 < 64 && (own_pawns & bb(s2))) s.mg += 6;
+                else s.mg -= 10;
+            }
+        }
+    }
+
+    if (EvalTerms.pawn_structure) {
+        for (int f = 0; f < 8; ++f) {
+            int n = popcount(own_pawns & (FILE_A_BB << f));
+            if (n > 1) add(s, DOUBLED, n - 1);
+            if (n && !(own_pawns & adjacent_files[f])) add(s, ISOLATED, n);
+        }
+    }
+
+    if (EvalTerms.passed_pawns) {
+        U64 b = own_pawns;
+        while (b) {
+            int sq = pop_lsb(b);
+            if (!(passed_mask[c][sq] & their_pawns)) {
+                int r = relative_rank(c, sq);
+                s.mg += PASSED_MG[r];
+                s.eg += PASSED_EG[r];
+            }
+        }
+    }
+
+    if (EvalTerms.rook_files) {
+        U64 b = pos.pieces(c, ROOK);
+        while (b) {
+            U64 file = file_bb(pop_lsb(b));
+            if (!(file & own_pawns)) add(s, (file & their_pawns) ? ROOK_SEMI_OPEN : ROOK_OPEN);
+        }
+    }
+    return s;
+}
+
+}  // namespace
+
+EvalFeatures EvalTerms;
+
 Value evaluate(const Position& pos) {
     Score total;
+    if (EvalTerms.mobility || EvalTerms.king_safety || EvalTerms.pawn_structure || EvalTerms.passed_pawns ||
+        EvalTerms.rook_files) {
+        Score w = eval_side(pos, WHITE), b = eval_side(pos, BLACK);
+        total.mg = w.mg - b.mg;
+        total.eg = w.eg - b.eg;
+    }
     int phase = 0;
     for (int p = W_PAWN; p <= B_KING; ++p) {
         U64 b = pos.pieces(Piece(p));

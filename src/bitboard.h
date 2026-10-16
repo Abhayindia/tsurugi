@@ -4,6 +4,10 @@
 
 #include <bit>
 
+#if defined(TSURUGI_PEXT)
+#include <immintrin.h>
+#endif
+
 namespace tsurugi {
 
 constexpr U64 FILE_A_BB = 0x0101010101010101ULL;
@@ -43,7 +47,11 @@ struct Magic {
     U64 magic;
     U64* table;
     int shift;
+#if defined(TSURUGI_PEXT)
+    unsigned index(U64 occ) const { return unsigned(_pext_u64(occ, mask)); }
+#else
     unsigned index(U64 occ) const { return unsigned(((occ & mask) * magic) >> shift); }
+#endif
 };
 
 extern Magic rook_magics[SQUARE_NB];
