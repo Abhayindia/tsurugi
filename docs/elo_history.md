@@ -8,3 +8,4 @@ Each row is one SPRT test of a single change against the previous version (fastc
 | 2026-10-17 | b5a7bb9 | nullmove | NullMove=true | 5+0.05 | 518 | 307-112-99 | 162.84 ± 29.92 | 2.96 | H1 |
 | 2026-10-17 | c1c24a3 | lmr | LMR=true NullMove=true vs NullMove=true | 5+0.05 | 492 | 275-81-136 | 180.63 ± 30.70 | 2.94 | H1 |
 | 2026-10-17 | 401f0cf | rfp | RFP=true NullMove=true LMR=true vs NullMove=true LMR=true | 5+0.05 | 1644 | 637-483-524 | 39.62 ± 16.79 | 2.95 | H1 |
+| 2026-10-17 | 7642bc6 | evalpassedpawns | EvalPassedPawns=true NullMove=true LMR=true RFP=true vs NullMove=true LMR=true RFP=true | 5+0.05 | 2252 | 736-858-658 | -23.04 ± 14.35 | 0.09 | H0 |
