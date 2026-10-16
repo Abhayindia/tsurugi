@@ -9,3 +9,5 @@
   MVV-LVA, killer and history move ordering.
 - Hand-crafted tapered evaluation: material, piece-square tables, bishop pair.
 - Runtime toggles for each search technique, all off until SPRT-tested.
+- Time management scaled per time control; no new iteration once 40% of the move budget is used.
+- Null-move pruning enabled: SPRT +162.8 ± 29.9 Elo (518 games, 5+0.05).
