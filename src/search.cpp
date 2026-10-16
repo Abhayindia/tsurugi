@@ -119,9 +119,9 @@ void Searcher::setup_time(const Position& pos, const SearchLimits& limits) {
     Color us = pos.side_to_move();
     if (limits.time[us] < 0) return;
     std::int64_t avail = std::max<std::int64_t>(1, limits.time[us] - move_overhead);
-    int mtg = limits.movestogo > 0 ? std::min(limits.movestogo, 40) : 30;
-    std::int64_t soft = avail / mtg + limits.inc[us] * 3 / 4;
-    hard_ = std::max<std::int64_t>(1, std::min(soft * 4, avail / 2));
+    int mtg = limits.movestogo > 0 ? std::min(limits.movestogo, 40) : 55;
+    std::int64_t soft = avail / mtg + limits.inc[us] * 3 / 5;
+    hard_ = std::max<std::int64_t>(1, std::min(soft * 2, avail / 10));
     soft_ = std::max<std::int64_t>(1, std::min(soft, hard_));
 }
 
@@ -460,7 +460,8 @@ SearchResult Searcher::search(Position& pos, const SearchLimits& limits, bool ve
             for (int k = 0; k < pv_len_[0]; ++k) ss << ' ' << move_to_uci(pv_[0][k]);
             std::cout << ss.str() << std::endl;
         }
-        if (soft_ >= 0 && elapsed() >= soft_) break;
+        // The next iteration typically costs several times this one, so don't start what can't finish.
+        if (soft_ >= 0 && elapsed() >= soft_ * 2 / 5) break;
         if (node_limit_ && nodes_ >= node_limit_) break;
     }
     result.nodes = nodes_;
