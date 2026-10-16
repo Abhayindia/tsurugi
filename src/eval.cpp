@@ -1,5 +1,7 @@
 #include "eval.h"
 
+#include "psqt.h"
+
 #include <algorithm>
 #include <cstdlib>
 
@@ -14,13 +16,17 @@ struct Score {
 
 constexpr int MG_VALUE[PIECE_TYPE_NB] = {90, 320, 335, 460, 940, 0};
 constexpr int EG_VALUE[PIECE_TYPE_NB] = {120, 290, 310, 520, 960, 0};
-constexpr int PHASE_WEIGHT[PIECE_TYPE_NB] = {0, 1, 1, 2, 4, 0};
 constexpr int TOTAL_PHASE = 24;
 constexpr int TEMPO = 12;
 constexpr Score BISHOP_PAIR = {25, 45};
 
 Score pst[PIECE_TYPE_NB][SQUARE_NB];
-Score table[PIECE_NB][SQUARE_NB];
+}  // namespace
+
+int PSQ_MG[PIECE_NB][SQUARE_NB];
+int PSQ_EG[PIECE_NB][SQUARE_NB];
+
+namespace {
 
 int center_distance(int s) {
     int f = file_of(s), r = rank_of(s);
@@ -59,8 +65,11 @@ void init_eval() {
     for (int pt = PAWN; pt <= KING; ++pt) {
         for (int s = 0; s < 64; ++s) {
             Score w = {MG_VALUE[pt] + pst[pt][s].mg, EG_VALUE[pt] + pst[pt][s].eg};
-            table[make_piece(WHITE, PieceType(pt))][s] = w;
-            table[make_piece(BLACK, PieceType(pt))][s ^ 56] = {-w.mg, -w.eg};
+            Piece wp = make_piece(WHITE, PieceType(pt)), bp = make_piece(BLACK, PieceType(pt));
+            PSQ_MG[wp][s] = w.mg;
+            PSQ_EG[wp][s] = w.eg;
+            PSQ_MG[bp][s ^ 56] = -w.mg;
+            PSQ_EG[bp][s ^ 56] = -w.eg;
         }
     }
 }
@@ -184,16 +193,9 @@ Value evaluate(const Position& pos) {
         total.mg = w.mg - b.mg;
         total.eg = w.eg - b.eg;
     }
-    int phase = 0;
-    for (int p = W_PAWN; p <= B_KING; ++p) {
-        U64 b = pos.pieces(Piece(p));
-        phase += PHASE_WEIGHT[type_of(Piece(p))] * popcount(b);
-        while (b) {
-            int s = pop_lsb(b);
-            total.mg += table[p][s].mg;
-            total.eg += table[p][s].eg;
-        }
-    }
+    int phase = pos.phase();
+    total.mg += pos.psq_mg();
+    total.eg += pos.psq_eg();
     if (more_than_one(pos.pieces(WHITE, BISHOP))) { total.mg += BISHOP_PAIR.mg; total.eg += BISHOP_PAIR.eg; }
     if (more_than_one(pos.pieces(BLACK, BISHOP))) { total.mg -= BISHOP_PAIR.mg; total.eg -= BISHOP_PAIR.eg; }
 

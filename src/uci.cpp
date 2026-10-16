@@ -32,6 +32,7 @@ const Toggle TOGGLES[] = {
     {"Futility", &Features.futility},        {"LMP", &Features.lmp},
     {"Aspiration", &Features.aspiration},    {"CheckExtension", &Features.check_ext},
     {"SEEPruning", &Features.see_pruning},   {"CounterMoves", &Features.counter_moves},
+    {"StagedTTMove", &Features.staged_tt},
     {"EvalMobility", &EvalTerms.mobility},   {"EvalPawnStructure", &EvalTerms.pawn_structure},
     {"EvalPassedPawns", &EvalTerms.passed_pawns}, {"EvalKingSafety", &EvalTerms.king_safety},
     {"EvalRookFiles", &EvalTerms.rook_files},

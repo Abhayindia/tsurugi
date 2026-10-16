@@ -55,6 +55,7 @@ public:
     U64 attackers_to(int s, U64 occ) const;
     bool attacked_by(int s, Color c) const { return attackers_to(s, occ_) & by_color_[c]; }
     bool legal(Move m) const;
+    bool pseudo_legal(Move m) const;  // true iff generate<GEN_ALL> would produce m here
 
     void make_move(Move m);
     void unmake_move(Move m);
@@ -63,6 +64,10 @@ public:
 
     bool is_draw() const;
     U64 compute_key() const;
+    int psq_mg() const { return psq_mg_; }
+    int psq_eg() const { return psq_eg_; }
+    int phase() const { return phase_; }
+
     bool has_non_pawn_material(Color c) const {
         return pieces(c) & ~(pieces(c, PAWN) | pieces(c, KING));
     }
@@ -79,6 +84,7 @@ private:
     Piece board_[SQUARE_NB];
     Color stm_;
     int start_ply_;
+    int psq_mg_ = 0, psq_eg_ = 0, phase_ = 0;
     std::vector<StateInfo> states_;
 };
 

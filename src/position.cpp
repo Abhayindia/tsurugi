@@ -1,6 +1,7 @@
 #include "position.h"
 
 #include "movegen.h"
+#include "psqt.h"
 
 #include <algorithm>
 #include <cctype>
@@ -61,6 +62,9 @@ void Position::put(Piece p, int s) {
     by_piece_[p] |= bb(s);
     by_color_[color_of(p)] |= bb(s);
     occ_ |= bb(s);
+    psq_mg_ += PSQ_MG[p][s];
+    psq_eg_ += PSQ_EG[p][s];
+    phase_ += PHASE_WEIGHT[type_of(p)];
 }
 
 void Position::remove(int s) {
@@ -69,6 +73,9 @@ void Position::remove(int s) {
     by_color_[color_of(p)] ^= bb(s);
     occ_ ^= bb(s);
     board_[s] = NO_PIECE;
+    psq_mg_ -= PSQ_MG[p][s];
+    psq_eg_ -= PSQ_EG[p][s];
+    phase_ -= PHASE_WEIGHT[type_of(p)];
 }
 
 void Position::relocate(int from, int to) {
@@ -79,6 +86,8 @@ void Position::relocate(int from, int to) {
     occ_ ^= m;
     board_[from] = NO_PIECE;
     board_[to] = p;
+    psq_mg_ += PSQ_MG[p][to] - PSQ_MG[p][from];
+    psq_eg_ += PSQ_EG[p][to] - PSQ_EG[p][from];
 }
 
 U64 Position::attackers_to(int s, U64 occ) const {
@@ -118,6 +127,7 @@ U64 Position::compute_key() const {
 bool Position::set_fen(const std::string& fen) {
     for (auto& b : by_piece_) b = 0;
     by_color_[WHITE] = by_color_[BLACK] = occ_ = 0;
+    psq_mg_ = psq_eg_ = phase_ = 0;
     for (auto& p : board_) p = NO_PIECE;
     states_.clear();
     states_.reserve(1024);
@@ -206,6 +216,54 @@ bool Position::legal(Move m) const {
         if (!(bb(to) & (attacks::between[ksq][lsb(chk)] | chk))) return false;
     }
     return !(pinned() & bb(from)) || (attacks::line[ksq][from] & bb(to));
+}
+
+bool Position::pseudo_legal(Move m) const {
+    if (m == NO_MOVE) return false;
+    Color us = stm_;
+    int from = from_sq(m), to = to_sq(m), flag = move_flag(m);
+    if (flag == 6 || flag == 7) return false;
+    Piece pc = board_[from];
+    if (pc == NO_PIECE || color_of(pc) != us || (by_color_[us] & bb(to))) return false;
+    PieceType pt = type_of(pc);
+    if (pt != KING && more_than_one(checkers())) return false;
+
+    if (flag == EP_CAPTURE)
+        return pt == PAWN && to == ep_square() && (attacks::pawn[us][from] & bb(to));
+
+    Piece target = board_[to];
+    bool capture = flag & CAPTURE;
+    if (capture != (target != NO_PIECE)) return false;
+
+    if (pt == PAWN) {
+        bool promo_rank = relative_rank(us, to) == 7;
+        if (is_promotion(m) != promo_rank) return false;
+        if (capture) return attacks::pawn[us][from] & bb(to);
+        if (flag == DOUBLE_PUSH)
+            return relative_rank(us, from) == 1 && to == from + 2 * up(us) && !(occ_ & (bb(from + up(us)) | bb(to)));
+        return (flag == QUIET || is_promotion(m)) && to == from + up(us);
+    }
+    if (is_promotion(m) || flag == DOUBLE_PUSH) return false;
+    if (is_castle(m)) {
+        if (pt != KING || in_check()) return false;
+        Color them = ~us;
+        int cr = castling_rights();
+        if (us == WHITE && from == E1) {
+            if (flag == KING_CASTLE && to == G1)
+                return (cr & WHITE_OO) && !(occ_ & (bb(F1) | bb(G1))) && !attacked_by(F1, them) && !attacked_by(G1, them);
+            if (flag == QUEEN_CASTLE && to == C1)
+                return (cr & WHITE_OOO) && !(occ_ & (bb(B1) | bb(C1) | bb(D1))) && !attacked_by(D1, them) && !attacked_by(C1, them);
+        }
+        if (us == BLACK && from == E8) {
+            if (flag == KING_CASTLE && to == G8)
+                return (cr & BLACK_OO) && !(occ_ & (bb(F8) | bb(G8))) && !attacked_by(F8, them) && !attacked_by(G8, them);
+            if (flag == QUEEN_CASTLE && to == C8)
+                return (cr & BLACK_OOO) && !(occ_ & (bb(B8) | bb(C8) | bb(D8))) && !attacked_by(D8, them) && !attacked_by(C8, them);
+        }
+        return false;
+    }
+    if (flag != QUIET && flag != CAPTURE) return false;
+    return attacks::piece(pt, from, occ_) & bb(to);
 }
 
 void Position::make_move(Move m) {

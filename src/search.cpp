@@ -317,23 +317,45 @@ Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int p
         }
     }
 
+    // The TT move is tried before any generation; most cut-nodes then never generate moves at all.
     MoveList list;
-    generate<GEN_ALL>(pos, list);
     int scores[256];
-    score_moves(pos, list.moves, list.size, scores, tt_move, ply);
+    bool tt_first = Features.staged_tt && pos.pseudo_legal(tt_move), tt_done = false, generated = false;
+    int next = 0;
 
     Value best = -VALUE_INFINITE, alpha0 = alpha;
     Move best_move = NO_MOVE;
     Move quiets[256];
     int nq = 0, legal = 0;
 
-    for (int i = 0; i < list.size; ++i) {
-        int bi = i;
-        for (int j = i + 1; j < list.size; ++j)
-            if (scores[j] > scores[bi]) bi = j;
-        std::swap(list.moves[i], list.moves[bi]);
-        std::swap(scores[i], scores[bi]);
-        Move m = list.moves[i];
+    for (;;) {
+        Move m;
+        if (tt_first && !tt_done) {
+            m = tt_move;
+            tt_done = true;
+        } else {
+            if (!generated) {
+                generate<GEN_ALL>(pos, list);
+                score_moves(pos, list.moves, list.size, scores, tt_move, ply);
+                generated = true;
+                if (tt_first) {
+                    for (int k = 0; k < list.size; ++k)
+                        if (list.moves[k] == tt_move) {
+                            std::swap(list.moves[0], list.moves[k]);
+                            std::swap(scores[0], scores[k]);
+                            next = 1;
+                            break;
+                        }
+                }
+            }
+            if (next >= list.size) break;
+            int bi = next;
+            for (int j = next + 1; j < list.size; ++j)
+                if (scores[j] > scores[bi]) bi = j;
+            std::swap(list.moves[next], list.moves[bi]);
+            std::swap(scores[next], scores[bi]);
+            m = list.moves[next++];
+        }
         if (!pos.legal(m)) continue;
 
         bool quiet = !is_capture(m) && !is_promotion(m);

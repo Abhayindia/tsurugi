@@ -29,6 +29,7 @@ struct SearchFeatures {
     bool check_ext = false;
     bool see_pruning = false;
     bool counter_moves = false;
+    bool staged_tt = false;
 };
 
 extern SearchFeatures Features;

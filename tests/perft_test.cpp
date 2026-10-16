@@ -1,3 +1,4 @@
+#include "eval.h"
 #include "movegen.h"
 #include "perft.h"
 #include "position.h"
@@ -43,6 +44,12 @@ bool check_consistency(Position& pos, int depth) {
         std::cout << "  key mismatch at " << pos.fen() << '\n';
         return false;
     }
+    Position fresh;
+    fresh.set_fen(pos.fen());
+    if (fresh.psq_mg() != pos.psq_mg() || fresh.psq_eg() != pos.psq_eg() || fresh.phase() != pos.phase()) {
+        std::cout << "  incremental eval mismatch at " << pos.fen() << '\n';
+        return false;
+    }
     if (depth == 0) return true;
     MoveList list;
     generate_legal(pos, list);
@@ -60,11 +67,37 @@ bool check_consistency(Position& pos, int depth) {
     return true;
 }
 
+// pseudo_legal(m) must be true exactly for the moves generate<GEN_ALL> produces, over all 2^16 encodings.
+bool check_pseudo_legal(Position& pos, int depth) {
+    MoveList list;
+    generate<GEN_ALL>(pos, list);
+    std::vector<bool> generated(65536, false);
+    for (Move m : list) generated[m] = true;
+    for (int i = 1; i < 65536; ++i) {
+        if (pos.pseudo_legal(Move(i)) != generated[i]) {
+            std::cout << "  pseudo_legal mismatch for " << move_to_uci(Move(i)) << " flag " << (i >> 12)
+                      << " (generated=" << generated[i] << ") at " << pos.fen() << '\n';
+            return false;
+        }
+    }
+    if (depth == 0) return true;
+    MoveList legal;
+    generate_legal(pos, legal);
+    for (Move m : legal) {
+        pos.make_move(m);
+        bool ok = check_pseudo_legal(pos, depth - 1);
+        pos.unmake_move(m);
+        if (!ok) return false;
+    }
+    return true;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
     bool quick = argc > 1 && std::strcmp(argv[1], "--quick") == 0;
     Position::init();
+    init_eval();
 
     int failures = 0;
     std::uint64_t total_nodes = 0;
@@ -79,6 +112,10 @@ int main(int argc, char** argv) {
         }
         if (!check_consistency(pos, 3)) {
             std::cout << c.name << ": consistency FAILED\n";
+            ++failures;
+        }
+        if (!check_pseudo_legal(pos, 2)) {
+            std::cout << c.name << ": pseudo_legal FAILED\n";
             ++failures;
         }
         int maxd = quick ? c.quick_depth : c.full_depth;
