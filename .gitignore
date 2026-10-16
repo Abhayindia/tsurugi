@@ -1,0 +1,13 @@
+build/
+build-*/
+.env
+*.env
+bot/config.yml
+__pycache__/
+*.pyc
+tools/bin/
+tools/books/
+tools/engines/
+data/
+*.binpack
+*.pgn
