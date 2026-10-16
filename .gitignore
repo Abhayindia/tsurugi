@@ -11,3 +11,4 @@ tools/engines/
 data/
 *.binpack
 *.pgn
+config.json
