@@ -10,7 +10,7 @@ struct EvalFeatures {
     bool pawn_structure = false;
     bool passed_pawns = false;
     bool king_safety = true;
-    bool rook_files = false;
+    bool rook_files = true;
 };
 
 extern EvalFeatures EvalTerms;
