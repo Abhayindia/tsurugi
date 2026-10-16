@@ -21,7 +21,7 @@ struct SearchLimits {
 struct SearchFeatures {
     bool null_move = true;
     bool lmr = true;
-    bool rfp = false;
+    bool rfp = true;
     bool razoring = false;
     bool futility = false;
     bool lmp = false;

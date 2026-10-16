@@ -7,3 +7,4 @@ Each row is one SPRT test of a single change against the previous version (fastc
 | 2026-10-17 | 0fc77a1 | sanity_selfplay | new binary | 8+0.08 | 200 | 66-81-53 | -31.51 ± 48.15 | ? | inconclusive |
 | 2026-10-17 | b5a7bb9 | nullmove | NullMove=true | 5+0.05 | 518 | 307-112-99 | 162.84 ± 29.92 | 2.96 | H1 |
 | 2026-10-17 | c1c24a3 | lmr | LMR=true NullMove=true vs NullMove=true | 5+0.05 | 492 | 275-81-136 | 180.63 ± 30.70 | 2.94 | H1 |
+| 2026-10-17 | 401f0cf | rfp | RFP=true NullMove=true LMR=true vs NullMove=true LMR=true | 5+0.05 | 1644 | 637-483-524 | 39.62 ± 16.79 | 2.95 | H1 |

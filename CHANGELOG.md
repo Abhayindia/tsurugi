@@ -12,3 +12,4 @@
 - Time management scaled per time control; no new iteration once 40% of the move budget is used.
 - Null-move pruning enabled: SPRT +162.8 ± 29.9 Elo (518 games, 5+0.05).
 - Late move reductions enabled: SPRT +180.6 ± 30.7 Elo (492 games, 5+0.05).
+- Reverse futility pruning enabled: SPRT +39.6 ± 16.8 Elo (1644 games, 5+0.05).
