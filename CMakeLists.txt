@@ -26,8 +26,18 @@ add_library(tsurugi_core STATIC
   src/position.cpp
   src/movegen.cpp
   src/perft.cpp
+  src/eval.cpp
+  src/tt.cpp
+  src/search.cpp
+  src/uci.cpp
 )
 target_include_directories(tsurugi_core PUBLIC src)
+
+find_package(Threads REQUIRED)
+target_link_libraries(tsurugi_core PUBLIC Threads::Threads)
+
+add_executable(tsurugi src/main.cpp)
+target_link_libraries(tsurugi PRIVATE tsurugi_core)
 
 enable_testing()
 
