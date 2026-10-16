@@ -1,6 +1,7 @@
 #include "uci.h"
 
 #include "eval.h"
+#include "nnue.h"
 #include "perft.h"
 #include "position.h"
 #include "search.h"
@@ -64,6 +65,8 @@ public:
         is >> cmd;
         if (cmd == "uci") {
             std::cout << "id name " << NAME << "\nid author " << AUTHOR << '\n'
+                      << "option name UseNNUE type check default " << (use_nnue_ ? "true" : "false") << '\n'
+                      << "option name EvalFile type string default " << nnue::description() << '\n'
                       << "option name Hash type spin default 16 min 1 max 4096\n"
                       << "option name Threads type spin default 1 min 1 max 1\n"
                       << "option name Move Overhead type spin default 50 min 0 max 5000\n";
@@ -187,6 +190,16 @@ private:
             return;
         }
         if (n == "threads") return;
+        if (n == "evalfile") {
+            if (!nnue::load(value)) std::cout << "info string failed to load network " << value << std::endl;
+            else std::cout << "info string loaded network " << value << std::endl;
+            set_nnue(use_nnue_);
+            return;
+        }
+        if (n == "usennue") {
+            set_nnue(lower(value) == "true");
+            return;
+        }
         for (const Toggle& t : TOGGLES)
             if (n == lower(t.name)) {
                 *t.flag = lower(value) == "true";
@@ -195,6 +208,14 @@ private:
         std::cout << "info string unknown option " << name << std::endl;
     }
 
+    void set_nnue(bool on) {
+        use_nnue_ = on;
+        if (on && !nnue::loaded()) std::cout << "info string UseNNUE requested but no network is loaded" << std::endl;
+        Position::nnue_enabled = on && nnue::loaded();
+        pos_.set_fen(pos_.fen());  // rebuild accumulators (history is irrelevant: positions are always resent)
+    }
+
+    bool use_nnue_ = false;
     Position pos_, search_pos_;
     Searcher searcher_;
     std::thread thread_;
@@ -205,6 +226,9 @@ private:
 int uci_main(int argc, char** argv) {
     Position::init();
     init_eval();
+    std::string exe = argv[0];
+    std::string dir = exe.find_last_of("/\\") == std::string::npos ? "." : exe.substr(0, exe.find_last_of("/\\"));
+    nnue::load(dir + "/tsurugi.nnue");
     Engine engine;
     if (argc > 1) {
         std::string cmd;

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "bitboard.h"
+#include "nnue.h"
 
 #include <string>
 #include <vector>
@@ -64,6 +65,10 @@ public:
 
     bool is_draw() const;
     U64 compute_key() const;
+    // True while a network is loaded and UseNNUE is on; accumulators are only maintained then.
+    static inline bool nnue_enabled = false;
+    const nnue::Accumulator& accumulator() const { return acc_.back(); }
+
     int psq_mg() const { return psq_mg_; }
     int psq_eg() const { return psq_eg_; }
     int phase() const { return phase_; }
@@ -86,6 +91,7 @@ private:
     int start_ply_;
     int psq_mg_ = 0, psq_eg_ = 0, phase_ = 0;
     std::vector<StateInfo> states_;
+    std::vector<nnue::Accumulator> acc_;
 };
 
 }  // namespace tsurugi

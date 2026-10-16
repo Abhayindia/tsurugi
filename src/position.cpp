@@ -168,6 +168,12 @@ bool Position::set_fen(const std::string& fen) {
     states_.push_back(st);
     states_.back().key = compute_key();
     update_check_info();
+    acc_.clear();
+    if (nnue_enabled) {
+        acc_.reserve(MAX_PLY + 64);
+        acc_.emplace_back();
+        nnue::refresh(acc_.back(), board_);
+    }
     return true;
 }
 
@@ -272,6 +278,11 @@ void Position::make_move(Move m) {
     int from = from_sq(m), to = to_sq(m), flag = move_flag(m);
     Piece pc = board_[from];
     U64 k = ns.key;
+    nnue::Accumulator* acc = nullptr;
+    if (nnue_enabled) {
+        acc_.push_back(acc_.back());
+        acc = &acc_.back();
+    }
 
     ns.rule50++;
     ns.plies_from_null++;
@@ -285,10 +296,12 @@ void Position::make_move(Move m) {
         int cap = to - up(us);
         ns.captured = board_[cap];
         k ^= zobrist::psq[ns.captured][cap];
+        if (acc) nnue::sub(*acc, ns.captured, cap);
         remove(cap);
     } else if (flag & CAPTURE) {
         ns.captured = board_[to];
         k ^= zobrist::psq[ns.captured][to];
+        if (acc) nnue::sub(*acc, ns.captured, to);
         remove(to);
     }
     if (ns.captured != NO_PIECE) ns.rule50 = 0;
@@ -298,10 +311,12 @@ void Position::make_move(Move m) {
         int rt = flag == KING_CASTLE ? to - 1 : to + 1;
         Piece rook = board_[rf];
         k ^= zobrist::psq[rook][rf] ^ zobrist::psq[rook][rt];
+        if (acc) nnue::move(*acc, rook, rf, rt);
         relocate(rf, rt);
     }
 
     k ^= zobrist::psq[pc][from] ^ zobrist::psq[pc][to];
+    if (acc) nnue::move(*acc, pc, from, to);
     relocate(from, to);
 
     if (type_of(pc) == PAWN) {
@@ -314,6 +329,10 @@ void Position::make_move(Move m) {
             }
         } else if (is_promotion(m)) {
             Piece promo = make_piece(us, promo_type(m));
+            if (acc) {
+                nnue::sub(*acc, pc, to);
+                nnue::add(*acc, promo, to);
+            }
             remove(to);
             put(promo, to);
             k ^= zobrist::psq[pc][to] ^ zobrist::psq[promo][to];
@@ -349,6 +368,7 @@ void Position::unmake_move(Move m) {
     }
     if (st.captured != NO_PIECE) put(st.captured, flag == EP_CAPTURE ? to - up(us) : to);
     states_.pop_back();
+    if (nnue_enabled) acc_.pop_back();
 }
 
 void Position::make_null() {

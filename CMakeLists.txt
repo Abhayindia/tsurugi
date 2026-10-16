@@ -31,6 +31,7 @@ add_library(tsurugi_core STATIC
   src/movegen.cpp
   src/perft.cpp
   src/eval.cpp
+  src/nnue.cpp
   src/tt.cpp
   src/search.cpp
   src/uci.cpp

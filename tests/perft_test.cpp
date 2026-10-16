@@ -4,6 +4,7 @@
 #include "position.h"
 
 #include <chrono>
+#include <cstdlib>
 #include <cstring>
 #include <iostream>
 #include <string>
@@ -48,6 +49,11 @@ bool check_consistency(Position& pos, int depth) {
     fresh.set_fen(pos.fen());
     if (fresh.psq_mg() != pos.psq_mg() || fresh.psq_eg() != pos.psq_eg() || fresh.phase() != pos.phase()) {
         std::cout << "  incremental eval mismatch at " << pos.fen() << '\n';
+        return false;
+    }
+    if (Position::nnue_enabled &&
+        std::memcmp(&fresh.accumulator(), &pos.accumulator(), sizeof(nnue::Accumulator)) != 0) {
+        std::cout << "  incremental NNUE accumulator mismatch at " << pos.fen() << '\n';
         return false;
     }
     if (depth == 0) return true;
@@ -98,6 +104,15 @@ int main(int argc, char** argv) {
     bool quick = argc > 1 && std::strcmp(argv[1], "--quick") == 0;
     Position::init();
     init_eval();
+    // With TSURUGI_TEST_NET set, the consistency walk also checks incremental NNUE accumulators.
+    if (const char* net = std::getenv("TSURUGI_TEST_NET")) {
+        if (!nnue::load(net)) {
+            std::cout << "cannot load " << net << '\n';
+            return 1;
+        }
+        Position::nnue_enabled = true;
+        std::cout << "checking NNUE accumulators with " << net << '\n';
+    }
 
     int failures = 0;
     std::uint64_t total_nodes = 0;
