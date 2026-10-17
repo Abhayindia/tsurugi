@@ -48,8 +48,30 @@ the previous version; the full record is in [docs/elo_history.md](docs/elo_histo
 | Aspiration windows | +78.3 ± 21.7 |
 | Mobility evaluation | +77.8 ± 21.3 |
 
-Gains are measured against the version before each change, so they are not additive. A calibrated rating against
-reference engines is in progress and will be published here with error bars.
+Gains are measured against the version before each change, so they are not additive.
+
+**Calibration:** 2941 ± 19 Elo on Stockfish's `UCI_Elo` scale (1600 games at 10+0.1 against Stockfish 17.1 limited to
+2400, 2700, 3000 and 3190). That scale is calibrated by Stockfish at longer time controls, so treat it as an
+approximation rather than a rating-list figure.
+
+**Ablation:** how much the current engine loses when one technique is switched off (3200 games each, 8+0.08):
+
+| Technique removed | Elo lost |
+|---|---|
+| NNUE evaluation | 272 ± 14 |
+| Late move reductions | 155 ± 10 |
+| SEE pruning | 112 ± 9 |
+| Reverse futility pruning | 71 ± 8 |
+| Late move pruning | 69 ± 8 |
+| Aspiration windows | 53 ± 8 |
+| Null-move pruning | 34 ± 8 |
+| Futility pruning | 14 ± 8 |
+| Counter-move heuristic | 14 ± 8 |
+| Check extension | 13 ± 8 |
+| Razoring | 7 ± 8 |
+
+Techniques overlap: null-move pruning was worth +138 when it was added to a bare search, but only 34 once the
+other pruning methods are present.
 
 ## Building
 
