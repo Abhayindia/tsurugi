@@ -46,16 +46,20 @@ class Net(nn.Module):
 
 
 def load(data, limit):
-    feats, stm, cp = [], [], []
+    feats, stm, cp, res = [], [], [], []
     for path in sorted(glob.glob(str(Path(data).expanduser() / "shard_*.npz"))):
         d = np.load(path)
         feats.append(d["features"]), stm.append(d["stm"]), cp.append(d["cp"])
+        # Game result from White's view (0/1/2); shards without one (Stockfish labels) get -1.
+        res.append(d["result"] if "result" in d.files else np.full(len(d["cp"]), -1, dtype=np.int8))
         if limit and sum(len(x) for x in cp) >= limit:
             break
     f, s, c = np.concatenate(feats), np.concatenate(stm), np.concatenate(cp).astype(np.float32)
+    r = np.concatenate(res).astype(np.float32)
     c_stm = np.where(s == 0, c, -c)
+    r_stm = np.where(r < 0, -1.0, np.where(s == 0, r, 2 - r) / 2).astype(np.float32)
     n = limit or len(c)
-    return f[:n], s[:n], c_stm[:n]
+    return f[:n], s[:n], c_stm[:n], r_stm[:n]
 
 
 def export(net, path, hidden):
@@ -83,6 +87,7 @@ def main():
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--threads", type=int, default=4)
     ap.add_argument("--val", type=float, default=0.02)
+    ap.add_argument("--wdl", type=float, default=0.0, help="weight of the game result in the target (0 = score only)")
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     a = ap.parse_args()
     torch.set_num_threads(a.threads)
@@ -90,7 +95,7 @@ def main():
     dev = torch.device(a.device)
     print(f"training on {dev}", flush=True)
 
-    f, s, c = load(a.data, a.limit)
+    f, s, c, r = load(a.data, a.limit)
     rng = np.random.default_rng(1)
     perm = rng.permutation(len(c))
     n_val = int(len(c) * a.val)
@@ -105,7 +110,12 @@ def main():
         w, b = views(f[idx])
         return (torch.from_numpy(w).to(dev), torch.from_numpy(b).to(dev),
                 torch.from_numpy(s[idx].astype(np.int64)).to(dev),
-                torch.sigmoid(torch.from_numpy(c[idx]).to(dev) / SCALE))
+                make_target(idx))
+
+    def make_target(idx):
+        score = torch.sigmoid(torch.from_numpy(c[idx]).to(dev) / SCALE)
+        result = torch.from_numpy(r[idx]).to(dev)
+        return torch.where(result < 0, score, (1 - a.wdl) * score + a.wdl * result)
 
     def val_loss():
         net.eval()
@@ -138,7 +148,7 @@ def main():
         export(net, a.out, a.hidden)
 
     Path(a.out).with_suffix(".json").write_text(json.dumps(
-        {"data": a.data, "positions": len(c), "hidden": a.hidden, "epochs": a.epochs, "batch": a.batch, "lr": a.lr,
+        {"data": a.data, "positions": len(c), "hidden": a.hidden, "epochs": a.epochs, "batch": a.batch, "lr": a.lr, "wdl": a.wdl,
          "scale": SCALE, "qa": QA, "qb": QB, "history": history}, indent=1))
 
 
