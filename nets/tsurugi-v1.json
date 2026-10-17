@@ -1,0 +1,45 @@
+{
+ "data": "~/tsurugi-data/nnue (30M quiet positions, Lichess eval DB, CC0)",
+ "positions": 30000000,
+ "hidden": 256,
+ "epochs_planned": 15,
+ "epochs_completed": 5,
+ "batch": 16384,
+ "lr": 0.001,
+ "scale": 400.0,
+ "qa": 255,
+ "qb": 64,
+ "history": [
+  {
+   "epoch": 1,
+   "train_loss": 0.009073339727730554,
+   "val_loss": 0.008110509304380094,
+   "seconds": 1415
+  },
+  {
+   "epoch": 2,
+   "train_loss": 0.00787165356556104,
+   "val_loss": 0.007806223162726776,
+   "seconds": 1406
+  },
+  {
+   "epoch": 3,
+   "train_loss": 0.007647868918779003,
+   "val_loss": 0.007653894355973682,
+   "seconds": 1862
+  },
+  {
+   "epoch": 4,
+   "train_loss": 0.007507072520133596,
+   "val_loss": 0.007543497202867591,
+   "seconds": 1737
+  },
+  {
+   "epoch": 5,
+   "train_loss": 0.00739829948400264,
+   "val_loss": 0.007437715772539377,
+   "seconds": 1933
+  }
+ ],
+ "note": "Stopped after epoch 5 on 2026-10-17: further training moved to Kaggle GPU."
+}
