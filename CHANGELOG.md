@@ -18,4 +18,6 @@
 - Passed-pawn evaluation tested and rejected: SPRT −23.0 ± 14.4 Elo (2252 games, 5+0.05).
 - Pawn-structure evaluation tested and rejected: SPRT −9.2 ± 10.0 Elo (4640 games, 5+0.05).
 - Rook open/semi-open file evaluation enabled: SPRT +49.3 ± 19.5 Elo (1216 games, 5+0.05).
+- Futility pruning enabled: SPRT +38.4 ± 17.1 Elo (1582 games, 5+0.05).
+- Late move pruning enabled: SPRT +25.4 ± 13.5 Elo (2528 games, 5+0.05).
 - SPRT runner clears stale snapshots left by the old snapshot layout instead of crashing.

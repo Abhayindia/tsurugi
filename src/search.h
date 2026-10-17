@@ -23,8 +23,8 @@ struct SearchFeatures {
     bool lmr = true;
     bool rfp = true;
     bool razoring = false;
-    bool futility = false;
-    bool lmp = false;
+    bool futility = true;
+    bool lmp = true;
     bool aspiration = false;
     bool check_ext = false;
     bool see_pruning = false;
