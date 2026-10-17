@@ -13,10 +13,13 @@ All strength figures are SPRT results against the previous version (fastchess, U
   +37.6 ± 15.0, king safety +18.1 ± 10.0. Passed pawns (−18.8 ± 11.8) was rejected. Pawn structure failed on top
   of five terms (−7.3 ± 7.9) but passed a 12800-game retest on top of nine (+5.8 ± 4.6, 8+0.08); it stays off by
   default because the network replaces the hand-crafted evaluation.
+- Reworked passed pawns (halved bonuses plus an endgame king-distance term to the stop square), on by default
+  for the hand-crafted evaluation: +33.5 ± 13.5 (1600 games, 8+0.08, without a network).
 
 ### Search
 - Late move reductions +144.8 ± 27.7 (492 games).
 - Null-move pruning +137.6 ± 28.1 (518 games).
+- SEE pruning of losing captures and quiets +109.0 ± 23.4 (474 games).
 - Aspiration windows +78.3 ± 21.7 (528 games).
 - Reverse futility pruning +32.6 ± 13.9 (1644 games).
 - Futility pruning +29.3 ± 13.1 (1582 games).

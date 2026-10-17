@@ -27,7 +27,7 @@ struct SearchFeatures {
     bool lmp = true;
     bool aspiration = true;
     bool check_ext = true;
-    bool see_pruning = false;
+    bool see_pruning = true;
     bool counter_moves = false;
     bool staged_tt = false;
 };
