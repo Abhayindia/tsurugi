@@ -22,7 +22,7 @@ struct SearchFeatures {
     bool null_move = true;
     bool lmr = true;
     bool rfp = true;
-    bool razoring = false;
+    bool razoring = true;
     bool futility = true;
     bool lmp = true;
     bool aspiration = false;
