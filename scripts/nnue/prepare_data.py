@@ -1,6 +1,6 @@
 """Turn the Lichess evaluation database into NNUE training shards.
 
-Usage: python tools/nnue/prepare_data.py --out ~/tsurugi-data/nnue --positions 30000000 [--shard 1000000]
+Usage: python scripts/nnue/prepare_data.py --out ~/tsurugi-data/nnue --positions 30000000 [--shard 1000000]
            [--src <path or https URL>] [--workers 4]
 Streams the zstd-compressed JSONL (a local file, possibly still downloading, or straight from
 https://database.lichess.org/lichess_db_eval.jsonl.zst). For each position it takes the deepest evaluation's

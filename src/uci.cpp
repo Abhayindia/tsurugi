@@ -48,6 +48,7 @@ class Engine {
 public:
     Engine() {
         TT.resize(16);
+        Position::nnue_enabled = use_nnue_ && nnue::loaded();
         pos_.set_fen(STARTPOS);
     }
     ~Engine() { stop(); }
@@ -215,7 +216,7 @@ private:
         pos_.set_fen(pos_.fen());  // rebuild accumulators (history is irrelevant: positions are always resent)
     }
 
-    bool use_nnue_ = false;
+    bool use_nnue_ = true;
     Position pos_, search_pos_;
     Searcher searcher_;
     std::thread thread_;

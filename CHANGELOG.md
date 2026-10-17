@@ -1,28 +1,37 @@
 # Changelog
 
+All strength figures are SPRT results against the previous version (fastchess, UHO_Lichess_4852_v1,
+5+0.05 unless noted), standard logistic Elo with 95% error.
+
 ## Unreleased
 
+### Evaluation
+- NNUE evaluation (768 → 2×256 → 1, clipped ReLU, int16, incremental accumulators), on by default.
+  Network v1 (30M Lichess positions): +241.6 ± 36.9 over the hand-crafted evaluation (444 games).
+- Network v2 (60M positions, 20 epochs, trained on a Kaggle GPU) is the default: +97.1 ± 13.4 over v1 (1600 games).
+- Hand-crafted evaluation terms (used without a network): mobility +77.8 ± 21.3, rook on open and semi-open files
+  +37.6 ± 15.0, king safety +18.1 ± 10.0. Passed pawns (−18.8 ± 11.8) and pawn structure (−7.3 ± 7.9) were
+  tested and rejected.
+
+### Search
+- Late move reductions +144.8 ± 27.7 (492 games).
+- Null-move pruning +137.6 ± 28.1 (518 games).
+- Aspiration windows +78.3 ± 21.7 (528 games).
+- Reverse futility pruning +32.6 ± 13.9 (1644 games).
+- Futility pruning +29.3 ± 13.1 (1582 games).
+- Late move pruning +19.8 ± 10.6 (2528 games).
+- Razoring +10.7 ± 7.3 (5650 games).
+
+### Engine
+- Time management scales with the time control and never starts an iteration it cannot finish.
+- PEXT slider attacks on BMI2 builds, transposition-table prefetching, incremental material and
+  piece-square totals.
+- The default network is copied next to the binary at build time and loaded on start-up.
+
+### Foundations
 - Bitboard board representation, magic bitboards, legal move generation, make/unmake, Zobrist hashing.
-- Perft suite: all standard positions exact to depth 6 (depth 7 for position 3).
-- UCI protocol with time management (`wtime/btime/winc/binc/movestogo/movetime/depth/nodes/infinite`).
-- Baseline search: iterative deepening, PVS, quiescence search, transposition table,
-  MVV-LVA, killer and history move ordering.
-- Hand-crafted tapered evaluation: material, piece-square tables, bishop pair.
-- Runtime toggles for each search technique, all off until SPRT-tested.
-- Time management scaled per time control; no new iteration once 40% of the move budget is used.
-- Null-move pruning enabled: SPRT +137.6 ± 28.1 Elo (518 games, 5+0.05).
-- Late move reductions enabled: SPRT +144.8 ± 27.7 Elo (492 games, 5+0.05).
-- Reverse futility pruning enabled: SPRT +32.6 ± 13.9 Elo (1644 games, 5+0.05).
-- King safety evaluation enabled: SPRT +18.1 ± 10.0 Elo (3714 games, 5+0.05).
-- Mobility evaluation enabled: SPRT +77.8 ± 21.3 Elo (740 games, 5+0.05).
-- Passed-pawn evaluation tested and rejected: SPRT −18.8 ± 11.8 Elo (2252 games, 5+0.05).
-- Pawn-structure evaluation tested and rejected: SPRT −7.3 ± 7.9 Elo (4640 games, 5+0.05).
-- Rook open/semi-open file evaluation enabled: SPRT +37.6 ± 15.0 Elo (1216 games, 5+0.05).
-- Futility pruning enabled: SPRT +29.3 ± 13.1 Elo (1582 games, 5+0.05).
-- Late move pruning enabled: SPRT +19.8 ± 10.6 Elo (2528 games, 5+0.05).
-- Razoring enabled: SPRT +10.7 ± 7.3 Elo (5650 games, 5+0.05).
-- NNUE evaluation (v1 net, 30M Lichess positions with Stockfish evaluations, 5 epochs) enabled via `UseNNUE`: SPRT +241.6 ± 36.9 Elo (444 games, 5+0.05).
-- Aspiration windows enabled: SPRT +78.3 ± 21.7 Elo (528 games, 5+0.05).
-- SPRT statistics use the exact pentanomial GSPRT (matches fastchess LLR on all 10 recorded tests); GitHub Actions SPRT runner (`tools/gh_sprt.py`, `.github/workflows/sprt.yml`), at most 8 parallel shards.
-- SPRT runner clears stale snapshots left by the old snapshot layout instead of crashing.
-- Correction: SPRT Elo figures were previously recorded as fastchess's normalised Elo (nElo); all entries above now show standard logistic Elo (nElo kept in paper/results/sprt_*.json).
+- Perft suite exact to depth 6 on all standard positions (depth 7 for position 3).
+- UCI protocol: `uci`, `isready`, `ucinewgame`, `position`, `go` (`wtime/btime/winc/binc/movestogo/depth/nodes/
+  movetime/infinite`), `stop`, `quit`, `setoption`.
+- Baseline search: iterative deepening, PVS, quiescence search, transposition table, MVV-LVA, killer and history
+  move ordering; tapered hand-crafted evaluation.

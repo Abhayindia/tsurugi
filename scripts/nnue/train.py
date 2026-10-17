@@ -1,6 +1,6 @@
 """Train Tsurugi's NNUE (768 -> 2x256 -> 1, clipped ReLU) on shards from prepare_data.py and export it.
 
-Usage: python tools/nnue/train.py --data ~/tsurugi-data/nnue --out nets/tsurugi-v1.nnue [--epochs 20] [--hidden 256]
+Usage: python scripts/nnue/train.py --data ~/tsurugi-data/nnue --out nets/tsurugi-v1.nnue [--epochs 20] [--hidden 256]
 Target: sigmoid(cp_stm / SCALE); prediction: sigmoid(net); MSE loss. Export quantises the feature
 transformer by QA and the output layer by QB (format documented in src/nnue.h).
 """

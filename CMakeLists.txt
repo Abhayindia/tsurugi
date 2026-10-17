@@ -44,6 +44,12 @@ target_link_libraries(tsurugi_core PUBLIC Threads::Threads)
 add_executable(tsurugi src/main.cpp)
 target_link_libraries(tsurugi PRIVATE tsurugi_core)
 
+# The engine loads tsurugi.nnue from its own directory; ship the default network with every build.
+set(TSURUGI_DEFAULT_NET "${CMAKE_SOURCE_DIR}/nets/tsurugi-v2.nnue" CACHE FILEPATH "Network copied next to the binary")
+if(EXISTS "${TSURUGI_DEFAULT_NET}")
+  configure_file("${TSURUGI_DEFAULT_NET}" "${CMAKE_BINARY_DIR}/tsurugi.nnue" COPYONLY)
+endif()
+
 enable_testing()
 
 add_executable(perft_test tests/perft_test.cpp)

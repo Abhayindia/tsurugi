@@ -1,6 +1,6 @@
 """Cross-check the engine's NNUE evaluation against an independent numpy implementation of the same file.
 
-Usage: python tools/nnue/check_net.py <engine> <net.nnue>
+Usage: python scripts/nnue/check_net.py <engine> <net.nnue>
 Any difference means the trainer and the engine disagree about features, perspective or scaling.
 """
 import struct

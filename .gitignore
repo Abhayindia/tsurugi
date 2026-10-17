@@ -12,3 +12,13 @@ data/
 *.binpack
 *.pgn
 config.json
+
+# Development lab (tracked in the private tsurugi-lab repository)
+tools/
+bot/
+paper/
+notebooks/
+nets/kaggle/
+docs/*
+!docs/data-sources.md
+!docs/elo_history.md

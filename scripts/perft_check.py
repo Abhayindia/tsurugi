@@ -1,6 +1,6 @@
 """Find the first perft divergence between Tsurugi and python-chess by recursive divide.
 
-Usage: python tools/perft_check.py <divide-binary> "<fen>" <depth>
+Usage: python scripts/perft_check.py <divide-binary> "<fen>" <depth>
 """
 import subprocess
 import sys

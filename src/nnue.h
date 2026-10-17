@@ -7,7 +7,7 @@
 
 namespace tsurugi::nnue {
 
-// Network file (little-endian), written by tools/nnue/train.py:
+// Network file (little-endian), written by scripts/nnue/train.py:
 //   "TSRG" | u32 version=1 | u32 hidden=256 | i16 ft_w[768][256] | i16 ft_b[256] | i16 out_w[512] | i32 out_b
 // Inputs: 768 piece-square features per perspective; hidden = clamp(acc, 0, QA); output scaled by SCALE/(QA*QB).
 constexpr int HIDDEN = 256;

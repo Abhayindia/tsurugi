@@ -18,7 +18,7 @@ The techniques used are standard in computer chess and were learned from public 
 
 - Perft node counts: Chess Programming Wiki,
   [Perft Results](https://www.chessprogramming.org/Perft_Results).
-- python-chess (GPL-3.0) is used only as an independent reference in `tools/perft_check.py`.
+- python-chess (GPL-3.0) is used only as an independent reference in `scripts/perft_check.py`.
 
 Opening books, game databases and training data are recorded with source URL and licence in
 `docs/data-sources.md` when they are added.

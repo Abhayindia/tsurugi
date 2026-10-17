@@ -1,61 +1,113 @@
-# Tsurugi
+<h1 align="center">Tsurugi</h1>
 
-Tsurugi is a UCI chess engine written from scratch in C++20, released under GPL-3.0.
+<p align="center">
+  A UCI chess engine written from scratch in C++20, with an NNUE evaluation and an SPRT-tested search.
+</p>
 
-Status: early development. Move generation is complete and perft-verified; the search and
-hand-crafted evaluation are a baseline that will be improved one SPRT-tested change at a time,
-followed by an NNUE evaluation trained on Tsurugi's own self-play data.
+<p align="center">
+  <a href="https://github.com/Abhayindia/tsurugi/actions/workflows/ci.yml"><img src="https://github.com/Abhayindia/tsurugi/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-blue.svg" alt="License: GPL-3.0"></a>
+  <a href="https://lichess.org/@/romeogonerogue"><img src="https://img.shields.io/badge/lichess-romeogonerogue-black.svg" alt="Lichess BOT"></a>
+</p>
 
-The current network, `nets/tsurugi-v1.nnue` (768→256×2→1, Tsurugi's own architecture and trainer), was trained
-on Stockfish evaluations of 30M positions from the CC0 Lichess evaluation database. Put it next to the binary
-as `tsurugi.nnue` and set `UseNNUE=true`.
+## Overview
+
+Tsurugi is a chess engine that speaks the [Universal Chess Interface](https://www.chessprogramming.org/UCI) and runs in
+any UCI GUI (Cute Chess, Arena, BanksiaGUI, En Croissant, ...). It does not include a graphical interface.
+
+Every change that affects playing strength is accepted only after a sequential probability ratio test (SPRT) against
+the previous version; the full record is in [docs/elo_history.md](docs/elo_history.md).
+
+## Features
+
+**Board and move generation**
+- Bitboards with PEXT (BMI2) or magic-bitboard sliding attacks
+- Legal move generation verified by perft to depth 6-7 on the standard test positions
+
+**Search**
+- Iterative deepening, principal variation search, aspiration windows
+- Transposition table with prefetching, quiescence search
+- Null-move pruning, late move reductions, late move pruning
+- Reverse futility pruning, futility pruning, razoring
+- Move ordering by TT move, MVV-LVA, killer moves and history
+
+**Evaluation**
+- NNUE: 768 → 2×256 → 1 network with clipped-ReLU activations, int16 quantisation and incrementally
+  updated accumulators, trained with Tsurugi's own PyTorch trainer ([scripts/nnue](scripts/nnue))
+- A hand-crafted tapered evaluation (material, piece-square tables, mobility, king safety, rook files) is used when
+  no network is loaded
+
+## Strength
+
+| Change | Elo gain (SPRT, 5+0.05) |
+|---|---|
+| NNUE evaluation (network v1) | +241.6 ± 36.9 |
+| Network v2 over v1 | +97.1 ± 13.4 |
+| Late move reductions | +144.8 ± 27.7 |
+| Null-move pruning | +137.6 ± 28.1 |
+| Aspiration windows | +78.3 ± 21.7 |
+| Mobility evaluation | +77.8 ± 21.3 |
+
+Gains are measured against the version before each change, so they are not additive. A calibrated rating against
+reference engines is in progress and will be published here with error bars.
 
 ## Building
 
 Requires CMake 3.16+ and a C++20 compiler (GCC 11+ or Clang 14+).
 
 ```
+git clone https://github.com/Abhayindia/tsurugi.git
+cd tsurugi
 cmake -S . -B build -DTSURUGI_NATIVE=ON
-cmake --build build
+cmake --build build -j
 ./build/tsurugi
 ```
 
-`-DTSURUGI_NATIVE=OFF` (the default) builds a portable binary that needs only POPCNT.
+`-DTSURUGI_NATIVE=ON` tunes the binary for the build machine and uses PEXT where available. Leave it off for a
+portable binary. The default network is copied next to the binary as `tsurugi.nnue` and loaded at start-up.
+
+## UCI options
+
+| Option | Default | Description |
+|---|---|---|
+| `Hash` | 16 | Transposition table size in MB (1-4096) |
+| `Threads` | 1 | Search threads (single-threaded for now) |
+| `Move Overhead` | 50 | Milliseconds reserved per move for GUI or network latency |
+| `UseNNUE` | true | Use the neural network evaluation |
+| `EvalFile` | `tsurugi.nnue` | Network file to load |
+
+The remaining options switch individual search and evaluation techniques on or off; they exist for testing and
+ablation studies and should normally be left at their defaults.
+
+Non-standard commands: `bench [depth]` (node-count signature), `perft <depth>`, `d` (print FEN), `eval`.
 
 ## Testing
 
 ```
-./build/perft_test --quick      # standard perft positions, shallow (CI)
-./build/perft_test              # full suite, depth 6-7 (about 17 billion nodes)
-tests/uci_smoke.sh ./build/tsurugi
-./build/tsurugi bench 8         # node-count signature for each commit
+./build/perft_test --quick          # perft on the standard positions (full suite: no argument)
+./build/eval_test                   # evaluation symmetry and static exchange evaluation
+bash tests/uci_smoke.sh ./build/tsurugi
+./build/tsurugi bench 8
 ```
 
-Full perft results are in `paper/results/perft.json`.
+Strength changes are tested with [fastchess](https://github.com/Disservin/fastchess) on the UHO_Lichess opening
+book using SPRT (elo0 = 0, elo1 = 5, α = β = 0.05). Tests run locally and on GitHub Actions
+([.github/workflows/sprt.yml](.github/workflows/sprt.yml)).
 
-## UCI options
+## Networks
 
-| Option | Default | Notes |
-|---|---|---|
-| Hash | 16 | Transposition table size in MB |
-| Threads | 1 | Single-threaded for now |
-| Move Overhead | 50 | Milliseconds reserved per move for GUI/network lag |
-| NullMove, LMR, RFP, Razoring, Futility, LMP, Aspiration, CheckExtension, SEEPruning, CounterMoves | see `uci` | Search technique toggles used for SPRT tests and the ablation study |
+Released networks are in [nets/](nets), each with a JSON file describing its training data and loss history. They are
+trained on Stockfish evaluations of positions from the [Lichess evaluation database](https://database.lichess.org/#evals)
+(CC0); see [docs/data-sources.md](docs/data-sources.md). The trainer and the Kaggle notebook used to train them are
+in [scripts/nnue](scripts/nnue).
 
-Extra commands: `bench [depth]`, `perft <depth>`, `go perft <depth>`, `d` (print FEN), `eval`.
+## Acknowledgements
 
-## Project layout
-
-```
-src/     engine source
-tests/   perft suite, UCI smoke test
-tools/   match/SPRT scripts, perft cross-check, data generation and NNUE trainer
-nets/    released network files
-bot/     lichess-bot configuration template
-paper/   research paper source and results
-docs/    design notes and Elo history
-```
+- The [Chess Programming Wiki](https://www.chessprogramming.org/), the reference for most techniques used here.
+- [Stockfish](https://github.com/official-stockfish/Stockfish), studied for ideas and used as a test opponent.
+  Tsurugi contains no Stockfish code. See [CREDITS.md](CREDITS.md).
+- [Lichess](https://lichess.org/) for its open databases, and [fastchess](https://github.com/Disservin/fastchess).
 
 ## License
 
-GPL-3.0. See `LICENSE` and `CREDITS.md`.
+Tsurugi is free software, distributed under the [GNU General Public License v3.0](LICENSE).
