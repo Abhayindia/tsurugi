@@ -34,6 +34,7 @@ add_library(tsurugi_core STATIC
   src/nnue.cpp
   src/tt.cpp
   src/search.cpp
+  src/datagen.cpp
   src/uci.cpp
 )
 target_include_directories(tsurugi_core PUBLIC src)

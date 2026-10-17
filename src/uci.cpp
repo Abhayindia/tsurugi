@@ -1,5 +1,6 @@
 #include "uci.h"
 
+#include "datagen.h"
 #include "eval.h"
 #include "nnue.h"
 #include "perft.h"
@@ -97,6 +98,14 @@ public:
             int depth = 8;
             is >> depth;
             bench(searcher_, depth);
+        } else if (cmd == "datagen") {
+            stop();
+            int games = 0;
+            std::uint64_t nodes = 5000, seed = 1;
+            std::string path;
+            is >> games >> nodes >> seed >> path;
+            if (games <= 0 || path.empty()) std::cout << "info string usage: datagen <games> <nodes> <seed> <outfile>" << std::endl;
+            else datagen(games, nodes, seed, path);
         } else if (cmd == "perft") {
             stop();
             int depth = 1;

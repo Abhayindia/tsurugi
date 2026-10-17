@@ -27,6 +27,8 @@ All strength figures are SPRT results against the previous version (fastchess, U
 - PEXT slider attacks on BMI2 builds, transposition-table prefetching, incremental material and
   piece-square totals.
 - The default network is copied next to the binary at build time and loaded on start-up.
+- `datagen <games> <nodes> <seed> <file>`: self-play at a fixed node budget from random openings, writing quiet
+  positions with the search score and the game result for network training.
 
 ### Foundations
 - Bitboard board representation, magic bitboards, legal move generation, make/unmake, Zobrist hashing.

@@ -1,0 +1,52 @@
+name: datagen
+run-name: datagen ${{ inputs.run_tag }}
+
+# Self-play training data: every shard runs one `tsurugi datagen` process per core and uploads the
+# positions ("fen | white-view cp | result") as a gzipped artifact.
+on:
+  workflow_dispatch:
+    inputs:
+      run_tag: {description: "unique name of this run", required: true}
+      ref: {description: "commit of the engine", default: "main"}
+      games: {description: "games per process", default: "10000"}
+      nodes: {description: "nodes per move", default: "5000"}
+      hours: {description: "stop each process after this many hours", default: "5"}
+      shards: {description: "JSON array of shard numbers", default: "[1,2,3,4,5,6,7,8]"}
+      seed_offset: {description: "added to every seed so runs never repeat games", default: "0"}
+      net: {description: "network placed next to the binary (empty for the hand-crafted eval)", default: "nets/tsurugi-v2.nnue"}
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      max-parallel: 8
+      matrix:
+        shard: ${{ fromJSON(inputs.shards) }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {ref: "${{ inputs.ref }}"}
+      - name: Build
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DTSURUGI_NATIVE=OFF -DTSURUGI_DEFAULT_NET= > /dev/null
+          cmake --build build -j"$(nproc)" --target tsurugi > /dev/null
+          if [ -n "${{ inputs.net }}" ]; then cp "${{ inputs.net }}" build/tsurugi.nnue; fi
+      - name: Generate
+        run: |
+          n=$(nproc)
+          for i in $(seq 0 $((n - 1))); do
+            seed=$(( ${{ inputs.seed_offset }} + ${{ matrix.shard }} * 64 + i ))
+            timeout "${{ inputs.hours }}h" ./build/tsurugi datagen ${{ inputs.games }} ${{ inputs.nodes }} $seed data_$i.txt \
+              2> log_$i.txt &
+          done
+          wait || true
+          tail -n 1 log_*.txt
+          cat data_*.txt | gzip -6 > datagen-${{ inputs.run_tag }}-${{ matrix.shard }}.txt.gz
+          ls -l datagen-*.txt.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: "datagen-${{ inputs.run_tag }}-${{ matrix.shard }}"
+          path: "datagen-${{ inputs.run_tag }}-${{ matrix.shard }}.txt.gz"
+          compression-level: 0
+          retention-days: 14
