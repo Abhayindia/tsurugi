@@ -16,6 +16,7 @@ on:
       shards: {description: "JSON array of shard numbers", default: "[1,2,3,4,5,6,7,8]"}
       seed_offset: {description: "added to the shard number to seed the opening order", default: "0"}
       net: {description: "network in the repo placed next to both binaries (empty for none)", default: "nets/tsurugi-v1.nnue"}
+      new_net: {description: "network for the new engine only (empty: same as net)", default: ""}
 
 jobs:
   play:
@@ -34,9 +35,11 @@ jobs:
       - name: Build engines
         run: |
           for e in new base; do
+            net="${{ inputs.net }}"
+            if [ $e = new ] && [ -n "${{ inputs.new_net }}" ]; then net="${{ inputs.new_net }}"; fi
             cmake -S $e -B $e/build -DCMAKE_BUILD_TYPE=Release -DTSURUGI_NATIVE=OFF > /dev/null
             cmake --build $e/build -j"$(nproc)" --target tsurugi > /dev/null
-            if [ -n "${{ inputs.net }}" ] && [ -f "$e/${{ inputs.net }}" ]; then cp "$e/${{ inputs.net }}" $e/build/tsurugi.nnue; fi
+            if [ -n "$net" ] && [ -f "$e/$net" ]; then cp "$e/$net" $e/build/tsurugi.nnue; fi
           done
       - uses: actions/cache@v4
         id: fc
