@@ -6,6 +6,10 @@ Status: early development. Move generation is complete and perft-verified; the s
 hand-crafted evaluation are a baseline that will be improved one SPRT-tested change at a time,
 followed by an NNUE evaluation trained on Tsurugi's own self-play data.
 
+The current network, `nets/tsurugi-v1.nnue` (768→256×2→1, Tsurugi's own architecture and trainer), was trained
+on Stockfish evaluations of 30M positions from the CC0 Lichess evaluation database. Put it next to the binary
+as `tsurugi.nnue` and set `UseNNUE=true`.
+
 ## Building
 
 Requires CMake 3.16+ and a C++20 compiler (GCC 11+ or Clang 14+).

@@ -21,6 +21,7 @@
 - Futility pruning enabled: SPRT +29.3 ± 13.1 Elo (1582 games, 5+0.05).
 - Late move pruning enabled: SPRT +19.8 ± 10.6 Elo (2528 games, 5+0.05).
 - Razoring enabled: SPRT +13.3 ± 9.1 Elo (5650 games, 5+0.05).
+- NNUE evaluation (v1 net, 30M Lichess positions with Stockfish evaluations, 5 epochs) enabled via `UseNNUE`: SPRT +241.6 ± 36.9 Elo (444 games, 5+0.05).
 - SPRT statistics use the exact pentanomial GSPRT (matches fastchess LLR on all 10 recorded tests); GitHub Actions SPRT runner (`tools/gh_sprt.py`, `.github/workflows/sprt.yml`), at most 8 parallel shards.
 - SPRT runner clears stale snapshots left by the old snapshot layout instead of crashing.
 - Correction: SPRT Elo figures were previously recorded as fastchess's normalised Elo (nElo); all entries above now show standard logistic Elo (nElo kept in paper/results/sprt_*.json).
