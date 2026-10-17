@@ -59,10 +59,10 @@ def load(data, limit):
 
 
 def export(net, path, hidden):
-    ft_w = np.round(net.ft.weight.detach().numpy()[:PAD] * QA).astype(np.int16)        # [768, H]
-    ft_b = np.round(net.ft_bias.detach().numpy() * QA).astype(np.int16)                 # [H]
-    out_w = np.round(net.out.weight.detach().numpy()[0] * QB).astype(np.int16)          # [2H]
-    out_b = int(round(float(net.out.bias.detach()[0]) * QA * QB))
+    ft_w = np.round(net.ft.weight.detach().cpu().numpy()[:PAD] * QA).astype(np.int16)  # [768, H]
+    ft_b = np.round(net.ft_bias.detach().cpu().numpy() * QA).astype(np.int16)           # [H]
+    out_w = np.round(net.out.weight.detach().cpu().numpy()[0] * QB).astype(np.int16)    # [2H]
+    out_b = int(round(float(net.out.bias.detach().cpu()[0]) * QA * QB))
     with open(path, "wb") as fh:
         fh.write(b"TSRG")
         fh.write(struct.pack("<II", 1, hidden))
@@ -83,9 +83,12 @@ def main():
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--threads", type=int, default=4)
     ap.add_argument("--val", type=float, default=0.02)
+    ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     a = ap.parse_args()
     torch.set_num_threads(a.threads)
     torch.manual_seed(1)
+    dev = torch.device(a.device)
+    print(f"training on {dev}", flush=True)
 
     f, s, c = load(a.data, a.limit)
     rng = np.random.default_rng(1)
@@ -94,14 +97,15 @@ def main():
     val_idx, train_idx = perm[:n_val], perm[n_val:]
     print(f"{len(train_idx)} training / {n_val} validation positions", flush=True)
 
-    net = Net(a.hidden)
+    net = Net(a.hidden).to(dev)
     opt = torch.optim.Adam(net.parameters(), lr=a.lr)
     sched = torch.optim.lr_scheduler.StepLR(opt, step_size=max(1, a.epochs // 3), gamma=0.3)
 
     def batch(idx):
         w, b = views(f[idx])
-        return (torch.from_numpy(w), torch.from_numpy(b), torch.from_numpy(s[idx].astype(np.int64)),
-                torch.sigmoid(torch.from_numpy(c[idx]) / SCALE))
+        return (torch.from_numpy(w).to(dev), torch.from_numpy(b).to(dev),
+                torch.from_numpy(s[idx].astype(np.int64)).to(dev),
+                torch.sigmoid(torch.from_numpy(c[idx]).to(dev) / SCALE))
 
     def val_loss():
         net.eval()
