@@ -22,6 +22,7 @@ All strength figures are SPRT results against the previous version (fastchess, U
 - Futility pruning +29.3 ± 13.1 (1582 games).
 - Late move pruning +19.8 ± 10.6 (2528 games).
 - Razoring +10.7 ± 7.3 (5650 games).
+- Check extension +5.7 ± 4.6 (12376 games).
 
 ### Engine
 - Time management scales with the time control and never starts an iteration it cannot finish.
