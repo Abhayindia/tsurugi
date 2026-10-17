@@ -10,8 +10,9 @@ All strength figures are SPRT results against the previous version (fastchess, U
   Network v1 (30M Lichess positions): +241.6 ± 36.9 over the hand-crafted evaluation (444 games).
 - Network v2 (60M positions, 20 epochs, trained on a Kaggle GPU) is the default: +97.1 ± 13.4 over v1 (1600 games).
 - Hand-crafted evaluation terms (used without a network): mobility +77.8 ± 21.3, rook on open and semi-open files
-  +37.6 ± 15.0, king safety +18.1 ± 10.0. Passed pawns (−18.8 ± 11.8) and pawn structure (−7.3 ± 7.9) were
-  tested and rejected.
+  +37.6 ± 15.0, king safety +18.1 ± 10.0. Passed pawns (−18.8 ± 11.8) was rejected. Pawn structure failed on top
+  of five terms (−7.3 ± 7.9) but passed a 12800-game retest on top of nine (+5.8 ± 4.6, 8+0.08); it stays off by
+  default because the network replaces the hand-crafted evaluation.
 
 ### Search
 - Late move reductions +144.8 ± 27.7 (492 games).
