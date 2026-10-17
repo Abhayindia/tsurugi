@@ -86,6 +86,13 @@ constexpr Score DOUBLED = {-10, -20};
 constexpr Score ISOLATED = {-10, -12};
 constexpr int PASSED_MG[8] = {0, 5, 10, 15, 25, 40, 60, 0};
 constexpr int PASSED_EG[8] = {0, 10, 15, 25, 45, 75, 110, 0};
+constexpr int PASSED2_MG[8] = {0, 2, 5, 7, 12, 20, 30, 0};
+constexpr int PASSED2_EG[8] = {0, 5, 7, 12, 22, 37, 55, 0};
+
+int square_distance(int a, int b) {
+    return std::max(std::abs(file_of(a) - file_of(b)), std::abs(rank_of(a) - rank_of(b)));
+}
+
 constexpr Score ROOK_OPEN = {25, 10};
 constexpr Score ROOK_SEMI_OPEN = {12, 6};
 
@@ -171,6 +178,20 @@ Score eval_side(const Position& pos, Color c) {
         }
     }
 
+    if (EvalTerms.passed_pawns2) {
+        U64 b = own_pawns;
+        int own_k = pos.king_sq(c), their_k = pos.king_sq(them);
+        while (b) {
+            int sq = pop_lsb(b);
+            if (!(passed_mask[c][sq] & their_pawns)) {
+                int r = relative_rank(c, sq);
+                int stop = sq + (c == WHITE ? 8 : -8);
+                s.mg += PASSED2_MG[r];
+                s.eg += PASSED2_EG[r] + (r - 1) * (5 * square_distance(their_k, stop) - 2 * square_distance(own_k, stop));
+            }
+        }
+    }
+
     if (EvalTerms.rook_files) {
         U64 b = pos.pieces(c, ROOK);
         while (b) {
@@ -189,7 +210,7 @@ Value evaluate(const Position& pos) {
     if (Position::nnue_enabled) return nnue::evaluate(pos.accumulator(), pos.side_to_move());
     Score total;
     if (EvalTerms.mobility || EvalTerms.king_safety || EvalTerms.pawn_structure || EvalTerms.passed_pawns ||
-        EvalTerms.rook_files) {
+        EvalTerms.passed_pawns2 || EvalTerms.rook_files) {
         Score w = eval_side(pos, WHITE), b = eval_side(pos, BLACK);
         total.mg = w.mg - b.mg;
         total.eg = w.eg - b.eg;

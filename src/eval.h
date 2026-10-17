@@ -9,6 +9,7 @@ struct EvalFeatures {
     bool mobility = true;
     bool pawn_structure = false;
     bool passed_pawns = false;
+    bool passed_pawns2 = false;
     bool king_safety = true;
     bool rook_files = true;
 };
