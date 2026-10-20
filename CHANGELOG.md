@@ -31,6 +31,8 @@ All strength figures are SPRT results against the previous version (fastchess, U
 - Check extension +5.7 ± 4.6 (12376 games).
 - Transposition-table move searched before move generation +9.3 ± 6.6 (4800 games, 8+0.08).
 - Continuation history (1- and 2-ply) for quiet move ordering and late move reductions +15.3 ± 7.6 (3200 games, 8+0.08).
+- Singular extensions with multi-cut and negative extensions +36.4 ± 7.3 (3200 games, 8+0.08).
+- Pawn-structure correction history of the static evaluation +15.3 ± 7.7 (3200 games, 8+0.08).
 
 ### Engine
 - Time management scales with the time control and never starts an iteration it cannot finish.

@@ -33,8 +33,8 @@ struct SearchFeatures {
     bool staged_tt = true;
     bool cont_history = true;
     bool iir = false;
-    bool singular = false;
-    bool corr_history = false;
+    bool singular = true;
+    bool corr_history = true;
 };
 
 extern SearchFeatures Features;
