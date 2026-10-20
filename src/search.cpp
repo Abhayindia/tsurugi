@@ -107,6 +107,12 @@ void Searcher::new_game() {
     std::memset(stack_, 0, sizeof(stack_));
     std::fill(cont_.begin(), cont_.end(), 0);
     std::memset(corr_, 0, sizeof(corr_));
+    std::memset(capt_, 0, sizeof(capt_));
+}
+
+int& Searcher::capt_entry(const Position& pos, Move m) {
+    PieceType victim = move_flag(m) == EP_CAPTURE ? PAWN : type_of(pos.piece_on(to_sq(m)));
+    return capt_[pos.piece_on(from_sq(m))][to_sq(m)][victim];
 }
 
 int& Searcher::corr_entry(const Position& pos) {
@@ -179,6 +185,7 @@ void Searcher::score_moves(const Position& pos, const Move* moves, int n, int* s
             int vv = move_flag(m) == EP_CAPTURE ? PIECE_VALUE[PAWN] : victim == NO_PIECE ? 0 : PIECE_VALUE[type_of(victim)];
             if (is_promotion(m)) vv += PIECE_VALUE[promo_type(m)];
             int s = vv * 16 - type_of(pos.piece_on(from));
+            if (Features.capt_history && is_capture(m)) s += capt_entry(pos, m) / 8;
             bool good = !Features.see_pruning || see_ge(pos, m, 0);
             scores[i] = (good ? 20'000'000 : -20'000'000) + s;
         } else if (is_promotion(m)) {
@@ -193,6 +200,12 @@ void Searcher::score_moves(const Position& pos, const Move* moves, int n, int* s
             scores[i] = quiet_score(us, m, pos.piece_on(from), ply);
         }
     }
+}
+
+void Searcher::update_capture_stats(const Position& pos, Move best, const Move* captures, int nc, int depth) {
+    int bonus = std::min(depth * depth * 16, 1600);
+    if (best != NO_MOVE) history_update(capt_entry(pos, best), bonus);
+    for (int i = 0; i < nc; ++i) history_update(capt_entry(pos, captures[i]), -bonus);
 }
 
 void Searcher::update_quiet_stats(const Position& pos, Move best, const Move* quiets, int nq, int depth, int ply) {
@@ -368,8 +381,8 @@ Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int p
 
     Value best = -VALUE_INFINITE, alpha0 = alpha;
     Move best_move = NO_MOVE;
-    Move quiets[256];
-    int nq = 0, legal = 0;
+    Move quiets[256], captures[64];
+    int nq = 0, nc = 0, legal = 0;
 
     for (;;) {
         Move m;
@@ -468,11 +481,13 @@ Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int p
                 pv_len_[ply] = std::max(pv_len_[ply + 1], ply + 1);
                 if (v >= beta) {
                     if (quiet) update_quiet_stats(pos, m, quiets, nq, depth, ply);
+                    if (Features.capt_history) update_capture_stats(pos, is_capture(m) ? m : NO_MOVE, captures, nc, depth);
                     break;
                 }
             }
         }
         if (quiet) quiets[nq++] = m;
+        else if (is_capture(m) && nc < 64) captures[nc++] = m;
     }
 
     if (legal == 0) {

@@ -35,6 +35,7 @@ struct SearchFeatures {
     bool iir = false;
     bool singular = true;
     bool corr_history = true;
+    bool capt_history = false;
 };
 
 extern SearchFeatures Features;
@@ -69,6 +70,8 @@ private:
     bool out_of_time();
     int* cont_entry(int ply, Piece p, int to);
     int quiet_score(Color us, Move m, Piece p, int ply);
+    int& capt_entry(const Position& pos, Move m);
+    void update_capture_stats(const Position& pos, Move best, const Move* captures, int nc, int depth);
     int& corr_entry(const Position& pos);
     Value corrected(const Position& pos, Value raw);
     void setup_time(const Position& pos, const SearchLimits& limits);
@@ -83,6 +86,8 @@ private:
 
     int history_[COLOR_NB][SQUARE_NB][SQUARE_NB] = {};
     Move counter_[PIECE_NB][SQUARE_NB] = {};
+    // Capture history: [moving piece][to][captured piece type].
+    int capt_[PIECE_NB][SQUARE_NB][PIECE_TYPE_NB] = {};
     // Continuation history: [previous piece][previous to][piece][to], indexed by cont_entry().
     // Correction history: running average of (search result - static eval) per pawn structure, x256.
     static constexpr int CORR_SIZE = 16384;
