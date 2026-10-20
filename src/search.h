@@ -31,7 +31,7 @@ struct SearchFeatures {
     bool see_pruning = true;
     bool counter_moves = true;
     bool staged_tt = true;
-    bool cont_history = false;
+    bool cont_history = true;
     bool iir = false;
 };
 

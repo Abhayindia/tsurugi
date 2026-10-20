@@ -30,6 +30,7 @@ All strength figures are SPRT results against the previous version (fastchess, U
 - Counter-move heuristic (reply to the previous move ordered after killers) +10.5 ± 7.2 (4416 games).
 - Check extension +5.7 ± 4.6 (12376 games).
 - Transposition-table move searched before move generation +9.3 ± 6.6 (4800 games, 8+0.08).
+- Continuation history (1- and 2-ply) for quiet move ordering and late move reductions +15.3 ± 7.6 (3200 games, 8+0.08).
 
 ### Engine
 - Time management scales with the time control and never starts an iteration it cannot finish.
