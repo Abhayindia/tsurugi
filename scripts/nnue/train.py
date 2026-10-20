@@ -21,12 +21,16 @@ WEIGHT_CLIP = 127 / QB  # keeps every quantised weight inside int16 and the outp
 
 
 def views(f):
-    """Feature indices from White's and Black's point of view (Black's: colours swapped, ranks flipped)."""
+    """Feature indices from White's and Black's point of view (Black's: colours swapped, ranks flipped).
+
+    Works on a torch tensor of int16 indices (-1 = empty slot) on any device."""
+    f = f.long()
     valid = f >= 0
     c, rest = f // 384, f % 384
     t, sq = rest // 64, rest % 64
     black = (1 - c) * 384 + t * 64 + (sq ^ 56)
-    return np.where(valid, f, PAD).astype(np.int64), np.where(valid, black, PAD).astype(np.int64)
+    pad = torch.full_like(f, PAD)
+    return torch.where(valid, f, pad), torch.where(valid, black, pad)
 
 
 class Net(nn.Module):
@@ -106,11 +110,10 @@ def main():
     opt = torch.optim.Adam(net.parameters(), lr=a.lr)
     sched = torch.optim.lr_scheduler.StepLR(opt, step_size=max(1, a.epochs // 3), gamma=0.3)
 
+    # Only the compact int16 features cross to the device; the index arithmetic runs there.
     def batch(idx):
-        w, b = views(f[idx])
-        return (torch.from_numpy(w).to(dev), torch.from_numpy(b).to(dev),
-                torch.from_numpy(s[idx].astype(np.int64)).to(dev),
-                make_target(idx))
+        w, b = views(torch.from_numpy(f[idx]).to(dev, non_blocking=True))
+        return w, b, torch.from_numpy(s[idx].astype(np.int64)).to(dev), make_target(idx)
 
     def make_target(idx):
         score = torch.sigmoid(torch.from_numpy(c[idx]).to(dev) / SCALE)
@@ -129,7 +132,7 @@ def main():
 
     history = []
     for epoch in range(a.epochs):
-        t0, tot, nb = time.time(), 0.0, 0
+        t0, tot, nb = time.time(), torch.zeros((), device=dev), 0
         rng.shuffle(train_idx)
         for i in range(0, len(train_idx), a.batch):
             w, b, st, target = batch(train_idx[i:i + a.batch])
@@ -140,9 +143,9 @@ def main():
             with torch.no_grad():
                 net.ft.weight.clamp_(-WEIGHT_CLIP, WEIGHT_CLIP)
                 net.out.weight.clamp_(-WEIGHT_CLIP, WEIGHT_CLIP)
-            tot, nb = tot + loss.item(), nb + 1
+            tot, nb = tot + loss.detach(), nb + 1
         sched.step()
-        history.append({"epoch": epoch + 1, "train_loss": tot / nb, "val_loss": val_loss(),
+        history.append({"epoch": epoch + 1, "train_loss": tot.item() / nb, "val_loss": val_loss(),
                         "seconds": round(time.time() - t0)})
         print(json.dumps(history[-1]), flush=True)
         export(net, a.out, a.hidden)

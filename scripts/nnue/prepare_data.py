@@ -80,6 +80,7 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--positions", type=int, default=30_000_000)
     ap.add_argument("--shard", type=int, default=1_000_000)
+    ap.add_argument("--compress", action="store_true", help="write compressed shards (smaller, for reuse as a dataset)")
     ap.add_argument("--src", default=DEFAULT_SRC)
     ap.add_argument("--workers", type=int, default=1)
     a = ap.parse_args()
@@ -97,7 +98,7 @@ def main():
         nonlocal feats, stms, cps, shard_no
         if not feats:
             return
-        np.savez(out / f"shard_{shard_no:04d}.npz", features=np.stack(feats[:a.shard]),
+        (np.savez_compressed if a.compress else np.savez)(out / f"shard_{shard_no:04d}.npz", features=np.stack(feats[:a.shard]),
                  stm=np.array(stms[:a.shard], dtype=np.int8), cp=np.array(cps[:a.shard], dtype=np.int16))
         print(f"shard {shard_no}: {min(len(feats), a.shard)} positions (seen {seen}, kept {kept}, "
               f"skipped {dict(skipped)})", flush=True)
