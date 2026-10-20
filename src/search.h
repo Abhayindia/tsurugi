@@ -38,6 +38,7 @@ struct SearchFeatures {
     bool capt_history = false;
     bool node_tm = false;
     bool cut_node = false;
+    bool probcut = false;
 };
 
 extern SearchFeatures Features;

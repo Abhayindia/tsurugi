@@ -372,6 +372,36 @@ Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int p
             if (stop_.load(std::memory_order_relaxed)) return 0;
             if (v >= beta) return v >= VALUE_MATE_IN_MAX_PLY ? beta : v;
         }
+
+        // ProbCut: a capture that clears beta by a wide margin in a shallow search almost always would in a full one.
+        Value pc_beta = beta + 200;
+        if (Features.probcut && depth >= 5 && std::abs(beta) < VALUE_MATE_IN_MAX_PLY &&
+            !(tt_hit && tte.depth >= depth - 3 && tt_value != VALUE_NONE && tt_value < pc_beta)) {
+            MoveList noisy;
+            generate<GEN_NOISY>(pos, noisy);
+            int pscores[256];
+            score_moves(pos, noisy.moves, noisy.size, pscores, tt_move, ply);
+            for (int i = 0; i < noisy.size; ++i) {
+                int bi = i;
+                for (int j = i + 1; j < noisy.size; ++j)
+                    if (pscores[j] > pscores[bi]) bi = j;
+                std::swap(noisy.moves[i], noisy.moves[bi]);
+                std::swap(pscores[i], pscores[bi]);
+                Move m = noisy.moves[i];
+                if (!pos.legal(m) || !see_ge(pos, m, pc_beta - eval)) continue;
+                stack_[ply].current = m;
+                stack_[ply].moved = pos.piece_on(from_sq(m));
+                pos.make_move(m);
+                Value v = -qsearch(pos, -pc_beta, -pc_beta + 1, ply + 1);
+                if (v >= pc_beta) v = -negamax(pos, -pc_beta, -pc_beta + 1, depth - 4, ply + 1, !cut);
+                pos.unmake_move(m);
+                if (stop_.load(std::memory_order_relaxed)) return 0;
+                if (v >= pc_beta) {
+                    TT.store(pos.key(), m, score_to_tt(v, ply), raw_eval, depth - 3, BOUND_LOWER);
+                    return v;
+                }
+            }
+        }
     }
 
     // The TT move is tried before any generation; most cut-nodes then never generate moves at all.
