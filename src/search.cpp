@@ -105,6 +105,22 @@ void Searcher::new_game() {
     std::memset(history_, 0, sizeof(history_));
     std::memset(counter_, 0, sizeof(counter_));
     std::memset(stack_, 0, sizeof(stack_));
+    std::fill(cont_.begin(), cont_.end(), 0);
+}
+
+// The continuation-history entry for piece p moving to `to`, following the move made `ply` plies up the stack.
+int* Searcher::cont_entry(int ply, Piece p, int to) {
+    if (ply < 0 || stack_[ply].current == NO_MOVE) return nullptr;
+    const Frame& f = stack_[ply];
+    return &cont_[((int(f.moved) * SQUARE_NB + to_sq(f.current)) * PIECE_NB + p) * SQUARE_NB + to];
+}
+
+int Searcher::quiet_score(Color us, Move m, Piece p, int ply) {
+    int s = history_[us][from_sq(m)][to_sq(m)];
+    if (!Features.cont_history) return s;
+    for (int back = 1; back <= 2; ++back)
+        if (int* e = cont_entry(ply - back, p, to_sq(m))) s += *e;
+    return s;
 }
 
 std::int64_t Searcher::elapsed() const { return now_ms() - start_; }
@@ -135,7 +151,7 @@ bool Searcher::out_of_time() {
     return false;
 }
 
-void Searcher::score_moves(const Position& pos, const Move* moves, int n, int* scores, Move tt_move, int ply) const {
+void Searcher::score_moves(const Position& pos, const Move* moves, int n, int* scores, Move tt_move, int ply) {
     Color us = pos.side_to_move();
     const Frame& f = stack_[ply];
     Move counter = NO_MOVE;
@@ -163,7 +179,7 @@ void Searcher::score_moves(const Position& pos, const Move* moves, int n, int* s
         } else if (m == counter) {
             scores[i] = 9'800'000;
         } else {
-            scores[i] = history_[us][from][to];
+            scores[i] = quiet_score(us, m, pos.piece_on(from), ply);
         }
     }
 }
@@ -174,6 +190,15 @@ void Searcher::update_quiet_stats(const Position& pos, Move best, const Move* qu
     history_update(history_[us][from_sq(best)][to_sq(best)], bonus);
     for (int i = 0; i < nq; ++i)
         if (quiets[i] != best) history_update(history_[us][from_sq(quiets[i])][to_sq(quiets[i])], -bonus);
+    if (Features.cont_history) {
+        for (int back = 1; back <= 2; ++back) {
+            if (int* e = cont_entry(ply - back, pos.piece_on(from_sq(best)), to_sq(best))) history_update(*e, bonus);
+            for (int i = 0; i < nq; ++i)
+                if (quiets[i] != best)
+                    if (int* e = cont_entry(ply - back, pos.piece_on(from_sq(quiets[i])), to_sq(quiets[i])))
+                        history_update(*e, -bonus);
+        }
+    }
 
     Frame& f = stack_[ply];
     if (f.killers[0] != best) {
@@ -386,7 +411,10 @@ Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int p
                 r += !pv;
                 r -= improving;
                 r -= gives_check;
-                r -= history_[~pos.side_to_move()][from_sq(m)][to_sq(m)] / 8192;
+                if (Features.cont_history)
+                    r -= quiet_score(~pos.side_to_move(), m, stack_[ply].moved, ply) / 16384;
+                else
+                    r -= history_[~pos.side_to_move()][from_sq(m)][to_sq(m)] / 8192;
                 r = std::clamp(r, 0, std::max(new_depth - 1, 0));
             }
             v = -negamax(pos, -alpha - 1, -alpha, new_depth - r, ply + 1);
