@@ -36,6 +36,7 @@ const Toggle TOGGLES[] = {
     {"SEEPruning", &Features.see_pruning},   {"CounterMoves", &Features.counter_moves},
     {"StagedTTMove", &Features.staged_tt},   {"ContHistory", &Features.cont_history},
     {"IIR", &Features.iir},   {"Singular", &Features.singular},
+    {"CorrHistory", &Features.corr_history},
     {"EvalMobility", &EvalTerms.mobility},   {"EvalPawnStructure", &EvalTerms.pawn_structure},
     {"EvalPassedPawns", &EvalTerms.passed_pawns}, {"EvalPassedPawns2", &EvalTerms.passed_pawns2},
     {"EvalKingSafety", &EvalTerms.king_safety},

@@ -34,6 +34,7 @@ struct SearchFeatures {
     bool cont_history = true;
     bool iir = false;
     bool singular = false;
+    bool corr_history = false;
 };
 
 extern SearchFeatures Features;
@@ -68,6 +69,8 @@ private:
     bool out_of_time();
     int* cont_entry(int ply, Piece p, int to);
     int quiet_score(Color us, Move m, Piece p, int ply);
+    int& corr_entry(const Position& pos);
+    Value corrected(const Position& pos, Value raw);
     void setup_time(const Position& pos, const SearchLimits& limits);
     std::int64_t elapsed() const;
 
@@ -81,6 +84,9 @@ private:
     int history_[COLOR_NB][SQUARE_NB][SQUARE_NB] = {};
     Move counter_[PIECE_NB][SQUARE_NB] = {};
     // Continuation history: [previous piece][previous to][piece][to], indexed by cont_entry().
+    // Correction history: running average of (search result - static eval) per pawn structure, x256.
+    static constexpr int CORR_SIZE = 16384;
+    int corr_[COLOR_NB][CORR_SIZE] = {};
     std::vector<int> cont_ = std::vector<int>(int(PIECE_NB) * SQUARE_NB * PIECE_NB * SQUARE_NB);
     Frame stack_[MAX_PLY + 4] = {};
     Move pv_[MAX_PLY + 1][MAX_PLY + 1] = {};

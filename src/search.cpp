@@ -106,6 +106,17 @@ void Searcher::new_game() {
     std::memset(counter_, 0, sizeof(counter_));
     std::memset(stack_, 0, sizeof(stack_));
     std::fill(cont_.begin(), cont_.end(), 0);
+    std::memset(corr_, 0, sizeof(corr_));
+}
+
+int& Searcher::corr_entry(const Position& pos) {
+    U64 h = (pos.pieces(WHITE, PAWN) * 0x9E3779B97F4A7C15ULL) ^ (pos.pieces(BLACK, PAWN) * 0xC2B2AE3D27D4EB4FULL);
+    return corr_[pos.side_to_move()][h >> 50];
+}
+
+Value Searcher::corrected(const Position& pos, Value raw) {
+    if (!Features.corr_history || raw == VALUE_NONE) return raw;
+    return std::clamp(raw + corr_entry(pos) / 256, -VALUE_MATE_IN_MAX_PLY + 1, VALUE_MATE_IN_MAX_PLY - 1);
 }
 
 // The continuation-history entry for piece p moving to `to`, following the move made `ply` plies up the stack.
@@ -228,11 +239,12 @@ Value Searcher::qsearch(Position& pos, Value alpha, Value beta, int ply) {
     }
 
     bool in_check = pos.in_check();
-    Value best, stand = VALUE_NONE;
+    Value best, stand = VALUE_NONE, raw_stand = VALUE_NONE;
     if (in_check) {
         best = -VALUE_MATE + ply;
     } else {
-        stand = evaluate(pos);
+        raw_stand = evaluate(pos);
+        stand = corrected(pos, raw_stand);
         if (stand >= beta) return stand;
         alpha = std::max(alpha, stand);
         best = stand;
@@ -278,7 +290,7 @@ Value Searcher::qsearch(Position& pos, Value alpha, Value beta, int ply) {
     if (in_check && legal == 0) return -VALUE_MATE + ply;
 
     Bound b = best >= beta ? BOUND_LOWER : best > alpha0 ? BOUND_EXACT : BOUND_UPPER;
-    TT.store(pos.key(), best_move, score_to_tt(best, ply), stand == VALUE_NONE ? 0 : stand, 0, b);
+    TT.store(pos.key(), best_move, score_to_tt(best, ply), raw_stand == VALUE_NONE ? 0 : raw_stand, 0, b);
     return best;
 }
 
@@ -319,7 +331,8 @@ Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int p
     if (Features.iir && depth >= 4 && tt_move == NO_MOVE) --depth;
 
     bool in_check = pos.in_check();
-    Value eval = in_check ? VALUE_NONE : tt_hit ? Value(tte.eval) : evaluate(pos);
+    Value raw_eval = in_check ? VALUE_NONE : tt_hit ? Value(tte.eval) : evaluate(pos);
+    Value eval = corrected(pos, raw_eval);
     stack_[ply].static_eval = eval;
     bool improving = !in_check && ply >= 2 && stack_[ply - 2].static_eval != VALUE_NONE &&
                      eval > stack_[ply - 2].static_eval;
@@ -473,7 +486,15 @@ Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int p
 
     if (excluded != NO_MOVE) return best;
     Bound b = best >= beta ? BOUND_LOWER : best > alpha0 ? BOUND_EXACT : BOUND_UPPER;
-    TT.store(pos.key(), best_move, score_to_tt(best, ply), eval == VALUE_NONE ? 0 : eval, depth, b);
+    // Learn how far the static eval missed for this pawn structure, when the result says something about it.
+    if (Features.corr_history && !in_check && std::abs(best) < VALUE_MATE_IN_MAX_PLY &&
+        (best_move == NO_MOVE || (!is_capture(best_move) && !is_promotion(best_move))) &&
+        !(b == BOUND_LOWER && best <= eval) && !(b == BOUND_UPPER && best >= eval)) {
+        int& e = corr_entry(pos);
+        int w = std::min(depth + 1, 16);
+        e = std::clamp((e * (256 - w) + (best - eval) * 256 * w) / 256, -96 * 256, 96 * 256);
+    }
+    TT.store(pos.key(), best_move, score_to_tt(best, ply), raw_eval == VALUE_NONE ? 0 : raw_eval, depth, b);
     return best;
 }
 
