@@ -37,6 +37,7 @@ struct SearchFeatures {
     bool corr_history = true;
     bool capt_history = false;
     bool node_tm = false;
+    bool cut_node = false;
 };
 
 extern SearchFeatures Features;
@@ -64,7 +65,7 @@ private:
         Move excluded;
     };
 
-    Value negamax(Position& pos, Value alpha, Value beta, int depth, int ply);
+    Value negamax(Position& pos, Value alpha, Value beta, int depth, int ply, bool cut);
     Value qsearch(Position& pos, Value alpha, Value beta, int ply);
     void score_moves(const Position& pos, const Move* moves, int n, int* scores, Move tt_move, int ply);
     void update_quiet_stats(const Position& pos, Move best, const Move* quiets, int nq, int depth, int ply);

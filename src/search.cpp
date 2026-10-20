@@ -307,7 +307,8 @@ Value Searcher::qsearch(Position& pos, Value alpha, Value beta, int ply) {
     return best;
 }
 
-Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int ply) {
+// `cut` marks a node expected to fail high: the reduced null-window child of its parent.
+Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int ply, bool cut) {
     bool pv = beta - alpha > 1;
     bool root = ply == 0;
     pv_len_[ply] = ply;
@@ -361,12 +362,12 @@ Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int p
         }
 
         if (Features.null_move && depth >= 3 && eval >= beta && pos.has_non_pawn_material(pos.side_to_move()) &&
-            ply > 0 && stack_[ply - 1].current != NO_MOVE) {
+            ply > 0 && stack_[ply - 1].current != NO_MOVE && (!Features.cut_node || cut)) {
             int r = 3 + depth / 4 + std::min((eval - beta) / 200, 3);
             stack_[ply].current = NO_MOVE;
             stack_[ply].moved = NO_PIECE;
             pos.make_null();
-            Value v = -negamax(pos, -beta, -beta + 1, depth - 1 - r, ply + 1);
+            Value v = -negamax(pos, -beta, -beta + 1, depth - 1 - r, ply + 1, !cut);
             pos.unmake_null();
             if (stop_.load(std::memory_order_relaxed)) return 0;
             if (v >= beta) return v >= VALUE_MATE_IN_MAX_PLY ? beta : v;
@@ -423,7 +424,7 @@ Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int p
             tte.depth >= depth - 3 && tte.bound() != BOUND_UPPER && std::abs(tt_value) < VALUE_MATE_IN_MAX_PLY) {
             Value sbeta = tt_value - 2 * depth;
             stack_[ply].excluded = m;
-            Value sv = negamax(pos, sbeta - 1, sbeta, (depth - 1) / 2, ply);
+            Value sv = negamax(pos, sbeta - 1, sbeta, (depth - 1) / 2, ply, cut);
             stack_[ply].excluded = NO_MOVE;
             if (stop_.load(std::memory_order_relaxed)) return 0;
             if (sv < sbeta) extension = 1;
@@ -450,7 +451,7 @@ Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int p
 
         Value v;
         if (legal == 1) {
-            v = -negamax(pos, -beta, -alpha, new_depth, ply + 1);
+            v = -negamax(pos, -beta, -alpha, new_depth, ply + 1, !pv && !cut);
         } else {
             int r = 0;
             if (Features.lmr && depth >= 3 && quiet && legal > (pv ? 3 : 2)) {
@@ -458,15 +459,16 @@ Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int p
                 r += !pv;
                 r -= improving;
                 r -= gives_check;
+                if (Features.cut_node) r += 2 * cut;
                 if (Features.cont_history)
                     r -= quiet_score(~pos.side_to_move(), m, stack_[ply].moved, ply) / 16384;
                 else
                     r -= history_[~pos.side_to_move()][from_sq(m)][to_sq(m)] / 8192;
                 r = std::clamp(r, 0, std::max(new_depth - 1, 0));
             }
-            v = -negamax(pos, -alpha - 1, -alpha, new_depth - r, ply + 1);
-            if (v > alpha && r > 0) v = -negamax(pos, -alpha - 1, -alpha, new_depth, ply + 1);
-            if (v > alpha && v < beta) v = -negamax(pos, -beta, -alpha, new_depth, ply + 1);
+            v = -negamax(pos, -alpha - 1, -alpha, new_depth - r, ply + 1, true);
+            if (v > alpha && r > 0) v = -negamax(pos, -alpha - 1, -alpha, new_depth, ply + 1, !cut);
+            if (v > alpha && v < beta) v = -negamax(pos, -beta, -alpha, new_depth, ply + 1, false);
         }
         pos.unmake_move(m);
         if (root) {
@@ -556,7 +558,7 @@ SearchResult Searcher::search(Position& pos, const SearchLimits& limits, bool ve
             int delta = 20;
             Value a = std::max(prev - delta, -VALUE_INFINITE), b = std::min(prev + delta, VALUE_INFINITE);
             for (;;) {
-                v = negamax(pos, a, b, depth, 0);
+                v = negamax(pos, a, b, depth, 0, false);
                 if (stop_.load()) break;
                 if (v <= a) { b = (a + b) / 2; a = std::max(v - delta, -VALUE_INFINITE); }
                 else if (v >= b) { b = std::min(v + delta, VALUE_INFINITE); }
@@ -565,7 +567,7 @@ SearchResult Searcher::search(Position& pos, const SearchLimits& limits, bool ve
                 if (delta > 800) { a = -VALUE_INFINITE; b = VALUE_INFINITE; }
             }
         } else {
-            v = negamax(pos, -VALUE_INFINITE, VALUE_INFINITE, depth, 0);
+            v = negamax(pos, -VALUE_INFINITE, VALUE_INFINITE, depth, 0, false);
         }
 
         if (stop_.load()) {
