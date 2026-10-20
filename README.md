@@ -43,6 +43,7 @@ the previous version; the full record is in [docs/elo_history.md](docs/elo_histo
 |---|---|
 | NNUE evaluation (network v1) | +241.6 ± 36.9 |
 | Network v2 over v1 | +97.1 ± 13.4 |
+| Network v3 over v2 (8+0.08) | +50.2 ± 8.1 |
 | Late move reductions | +144.8 ± 27.7 |
 | Null-move pruning | +137.6 ± 28.1 |
 | Aspiration windows | +78.3 ± 21.7 |
