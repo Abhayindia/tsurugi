@@ -301,13 +301,15 @@ Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int p
         if (alpha >= beta) return alpha;
     }
 
+    Move excluded = stack_[ply].excluded;
     TTEntry tte;
     Move tt_move = NO_MOVE;
     bool tt_hit = TT.probe(pos.key(), tte);
+    Value tt_value = tt_hit ? score_from_tt(tte.score, ply) : VALUE_NONE;
     if (tt_hit) {
         tt_move = tte.move;
-        Value tv = score_from_tt(tte.score, ply);
-        if (!pv && tte.depth >= depth &&
+        Value tv = tt_value;
+        if (!pv && excluded == NO_MOVE && tte.depth >= depth &&
             (tte.bound() == BOUND_EXACT || (tte.bound() == BOUND_LOWER && tv >= beta) ||
              (tte.bound() == BOUND_UPPER && tv <= alpha)))
             return tv;
@@ -323,7 +325,7 @@ Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int p
                      eval > stack_[ply - 2].static_eval;
     stack_[ply + 1].killers[0] = stack_[ply + 1].killers[1] = NO_MOVE;
 
-    if (!pv && !in_check) {
+    if (!pv && !in_check && excluded == NO_MOVE) {
         if (Features.rfp && depth <= 8 && eval - 75 * (depth - improving) >= beta && eval < VALUE_MATE_IN_MAX_PLY)
             return eval;
 
@@ -384,9 +386,24 @@ Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int p
             std::swap(scores[next], scores[bi]);
             m = list.moves[next++];
         }
-        if (!pos.legal(m)) continue;
+        if (m == excluded || !pos.legal(m)) continue;
 
         bool quiet = !is_capture(m) && !is_promotion(m);
+
+        // Singular extension: if no other move comes close to the TT move's stored score, the TT move is
+        // forced and gets searched deeper; if another move also beats beta, the node is cut (multi-cut).
+        int extension = 0;
+        if (Features.singular && !root && depth >= 8 && m == tt_move && excluded == NO_MOVE &&
+            tte.depth >= depth - 3 && tte.bound() != BOUND_UPPER && std::abs(tt_value) < VALUE_MATE_IN_MAX_PLY) {
+            Value sbeta = tt_value - 2 * depth;
+            stack_[ply].excluded = m;
+            Value sv = negamax(pos, sbeta - 1, sbeta, (depth - 1) / 2, ply);
+            stack_[ply].excluded = NO_MOVE;
+            if (stop_.load(std::memory_order_relaxed)) return 0;
+            if (sv < sbeta) extension = 1;
+            else if (sbeta >= beta) return sbeta;
+            else if (tt_value >= beta) extension = -1;
+        }
 
         if (!root && best > -VALUE_MATE_IN_MAX_PLY && pos.has_non_pawn_material(pos.side_to_move())) {
             if (quiet && Features.lmp && depth <= 6 && nq >= (3 + depth * depth) / (improving ? 1 : 2)) continue;
@@ -402,7 +419,7 @@ Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int p
         pos.make_move(m);
         TT.prefetch(pos.key());
         bool gives_check = pos.in_check();
-        int new_depth = depth - 1 + (Features.check_ext && gives_check ? 1 : 0);
+        int new_depth = depth - 1 + extension + (Features.check_ext && gives_check && extension <= 0 ? 1 : 0);
 
         Value v;
         if (legal == 1) {
@@ -446,6 +463,7 @@ Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int p
     }
 
     if (legal == 0) {
+        if (excluded != NO_MOVE) return alpha;
         bool any = false;
         for (Move m : list)
             if (pos.legal(m)) { any = true; break; }
@@ -453,6 +471,7 @@ Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int p
         return alpha;
     }
 
+    if (excluded != NO_MOVE) return best;
     Bound b = best >= beta ? BOUND_LOWER : best > alpha0 ? BOUND_EXACT : BOUND_UPPER;
     TT.store(pos.key(), best_move, score_to_tt(best, ply), eval == VALUE_NONE ? 0 : eval, depth, b);
     return best;

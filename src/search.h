@@ -33,6 +33,7 @@ struct SearchFeatures {
     bool staged_tt = true;
     bool cont_history = true;
     bool iir = false;
+    bool singular = false;
 };
 
 extern SearchFeatures Features;
@@ -57,6 +58,7 @@ private:
         Move current;
         Piece moved;
         Value static_eval;
+        Move excluded;
     };
 
     Value negamax(Position& pos, Value alpha, Value beta, int depth, int ply);
