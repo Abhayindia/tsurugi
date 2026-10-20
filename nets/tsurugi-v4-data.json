@@ -1,0 +1,13 @@
+{
+ "source": "https://database.lichess.org/lichess_db_eval.jsonl.zst",
+ "seen": 266540000,
+ "kept": 160000000,
+ "skipped": {
+  "mate": 30508410,
+  "check": 16340511,
+  "noisy": 53157761,
+  "extreme": 3792707,
+  "bad": 2737794
+ },
+ "shards": 160
+}

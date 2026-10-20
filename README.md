@@ -32,7 +32,7 @@ the previous version; the full record is in [docs/elo_history.md](docs/elo_histo
 - Move ordering by TT move, MVV-LVA, killer moves and history
 
 **Evaluation**
-- NNUE: 768 → 2×256 → 1 network with clipped-ReLU activations, int16 quantisation and incrementally
+- NNUE: 768 → 2×512 → 1 network with clipped-ReLU activations, int16 quantisation and incrementally
   updated accumulators, trained with Tsurugi's own PyTorch trainer ([scripts/nnue](scripts/nnue))
 - A hand-crafted tapered evaluation (material, piece-square tables, mobility, king safety, rook files) is used when
   no network is loaded
@@ -44,6 +44,7 @@ the previous version; the full record is in [docs/elo_history.md](docs/elo_histo
 | NNUE evaluation (network v1) | +241.6 ± 36.9 |
 | Network v2 over v1 | +97.1 ± 13.4 |
 | Network v3 over v2 (8+0.08) | +50.2 ± 8.1 |
+| Network v4 over v3 (8+0.08) | +47.9 ± 8.2 |
 | Late move reductions | +144.8 ± 27.7 |
 | Null-move pruning | +137.6 ± 28.1 |
 | Aspiration windows | +78.3 ± 21.7 |
@@ -51,7 +52,7 @@ the previous version; the full record is in [docs/elo_history.md](docs/elo_histo
 
 Gains are measured against the version before each change, so they are not additive.
 
-**Calibration:** 3030 ± 19 Elo with network v3 (2941 ± 19 with v2) on Stockfish's `UCI_Elo` scale (1600 games at 10+0.1 against Stockfish 17.1 limited to
+**Calibration:** 3030 ± 19 Elo with network v3 (2941 ± 19 with v2; network v4 not yet calibrated) on Stockfish's `UCI_Elo` scale (1600 games at 10+0.1 against Stockfish 17.1 limited to
 2400, 2700, 3000 and 3190). That scale is calibrated by Stockfish at longer time controls, so treat it as an
 approximation rather than a rating-list figure.
 
