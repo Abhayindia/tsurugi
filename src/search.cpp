@@ -440,6 +440,7 @@ Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int p
         }
 
         ++legal;
+        std::uint64_t nodes_before = nodes_;
         stack_[ply].current = m;
         stack_[ply].moved = pos.piece_on(from_sq(m));
         pos.make_move(m);
@@ -468,6 +469,15 @@ Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int p
             if (v > alpha && v < beta) v = -negamax(pos, -beta, -alpha, new_depth, ply + 1);
         }
         pos.unmake_move(m);
+        if (root) {
+            int k = 0;
+            while (k < root_count_ && root_moves_[k] != m) ++k;
+            if (k == root_count_ && root_count_ < 256) {
+                root_moves_[root_count_++] = m;
+                root_nodes_[k] = 0;
+            }
+            if (k < 256) root_nodes_[k] += nodes_ - nodes_before;
+        }
         if (stop_.load(std::memory_order_relaxed)) return 0;
 
         if (v > best) {
@@ -513,6 +523,12 @@ Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int p
     return best;
 }
 
+std::uint64_t Searcher::root_nodes_of(Move m) const {
+    for (int k = 0; k < root_count_; ++k)
+        if (root_moves_[k] == m) return root_nodes_[k];
+    return 0;
+}
+
 SearchResult Searcher::search(Position& pos, const SearchLimits& limits, bool verbose) {
     start_ = now_ms();
     stop_.store(false);
@@ -522,6 +538,8 @@ SearchResult Searcher::search(Position& pos, const SearchLimits& limits, bool ve
     TT.new_search();
     std::memset(stack_, 0, sizeof(stack_));
     for (auto& f : stack_) f.static_eval = VALUE_NONE;
+    root_count_ = 0;
+    int stability = 0;
 
     SearchResult result;
     MoveList legal_moves;
@@ -554,8 +572,11 @@ SearchResult Searcher::search(Position& pos, const SearchLimits& limits, bool ve
             if (root_best_ != NO_MOVE && depth > 1) result.best = root_best_;
             break;
         }
+        Value prev_score = prev;
+        Move prev_best = result.best;
         prev = v;
         result.best = pv_len_[0] > 0 ? pv_[0][0] : result.best;
+        stability = result.best == prev_best ? std::min(stability + 1, 8) : 0;
         result.score = v;
         result.depth = depth;
 
@@ -569,7 +590,17 @@ SearchResult Searcher::search(Position& pos, const SearchLimits& limits, bool ve
             std::cout << ss.str() << std::endl;
         }
         // The next iteration typically costs several times this one, so don't start what can't finish.
-        if (soft_ >= 0 && elapsed() >= soft_ * 2 / 5) break;
+        // With NodeTM the budget shrinks when the best move holds most of the nodes and stays put, and grows
+        // when the score drops.
+        double scale = 1.0;
+        if (Features.node_tm && depth >= 4 && nodes_ > 0) {
+            double frac = double(root_nodes_of(result.best)) / double(nodes_);
+            double nodes_f = (1.5 - frac) * 1.35;
+            double stab_f = 1.25 - 0.05 * stability;
+            double score_f = std::clamp(1.0 + 0.01 * (prev_score - v), 0.85, 1.5);
+            scale = nodes_f * stab_f * score_f;
+        }
+        if (soft_ >= 0 && elapsed() >= soft_ * 2 / 5 * scale) break;
         if (node_limit_ && nodes_ >= node_limit_) break;
     }
     result.nodes = nodes_;

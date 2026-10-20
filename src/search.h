@@ -36,6 +36,7 @@ struct SearchFeatures {
     bool singular = true;
     bool corr_history = true;
     bool capt_history = false;
+    bool node_tm = false;
 };
 
 extern SearchFeatures Features;
@@ -83,6 +84,11 @@ private:
     std::int64_t start_ = 0, soft_ = -1, hard_ = -1;
     int seldepth_ = 0;
     Move root_best_ = NO_MOVE;
+    // Nodes spent under each root move this search, for time management.
+    Move root_moves_[256] = {};
+    std::uint64_t root_nodes_[256] = {};
+    int root_count_ = 0;
+    std::uint64_t root_nodes_of(Move m) const;
 
     int history_[COLOR_NB][SQUARE_NB][SQUARE_NB] = {};
     Move counter_[PIECE_NB][SQUARE_NB] = {};
