@@ -50,20 +50,33 @@ class Net(nn.Module):
 
 
 def load(data, limit):
-    feats, stm, cp, res = [], [], [], []
-    for path in sorted(glob.glob(str(Path(data).expanduser() / "shard_*.npz"))):
-        d = np.load(path)
-        feats.append(d["features"]), stm.append(d["stm"]), cp.append(d["cp"])
-        # Game result from White's view (0/1/2); shards without one (Stockfish labels) get -1.
-        res.append(d["result"] if "result" in d.files else np.full(len(d["cp"]), -1, dtype=np.int8))
-        if limit and sum(len(x) for x in cp) >= limit:
+    """Read shards into preallocated arrays, so peak memory is the final size rather than twice it."""
+    paths = sorted(glob.glob(str(Path(data).expanduser() / "shard_*.npz")))
+    meta = Path(data).expanduser() / "meta.json"
+    total = json.loads(meta.read_text()).get("kept", 0) if meta.exists() else 0
+    if not total:
+        total = sum(len(np.load(p)["cp"]) for p in paths)
+    n = min(limit, total) if limit else total
+    f = np.empty((n, 32), dtype=np.int16)
+    s = np.empty(n, dtype=np.int8)
+    c_stm = np.empty(n, dtype=np.float32)
+    r_stm = np.empty(n, dtype=np.float32)
+    at = 0
+    for path in paths:
+        if at >= n:
             break
-    f, s, c = np.concatenate(feats), np.concatenate(stm), np.concatenate(cp).astype(np.float32)
-    r = np.concatenate(res).astype(np.float32)
-    c_stm = np.where(s == 0, c, -c)
-    r_stm = np.where(r < 0, -1.0, np.where(s == 0, r, 2 - r) / 2).astype(np.float32)
-    n = limit or len(c)
-    return f[:n], s[:n], c_stm[:n], r_stm[:n]
+        d = np.load(path)
+        k = min(len(d["cp"]), n - at)
+        f[at:at + k] = d["features"][:k]
+        st = d["stm"][:k]
+        s[at:at + k] = st
+        cp = d["cp"][:k].astype(np.float32)
+        c_stm[at:at + k] = np.where(st == 0, cp, -cp)
+        # Game result from White's view (0/1/2); shards without one (Stockfish labels) get -1.
+        r = d["result"][:k].astype(np.float32) if "result" in d.files else np.full(k, -1.0, dtype=np.float32)
+        r_stm[at:at + k] = np.where(r < 0, -1.0, np.where(st == 0, r, 2 - r) / 2)
+        at += k
+    return f[:at], s[:at], c_stm[:at], r_stm[:at]
 
 
 def export(net, path, hidden):
