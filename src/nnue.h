@@ -8,9 +8,14 @@
 namespace tsurugi::nnue {
 
 // Network file (little-endian), written by scripts/nnue/train.py:
-//   "TSRG" | u32 version=1 | u32 hidden=256 | i16 ft_w[768][256] | i16 ft_b[256] | i16 out_w[512] | i32 out_b
+//   "TSRG" | u32 version=1 | u32 hidden=H | i16 ft_w[768][H] | i16 ft_b[H] | i16 out_w[2H] | i32 out_b
 // Inputs: 768 piece-square features per perspective; hidden = clamp(acc, 0, QA); output scaled by SCALE/(QA*QB).
-constexpr int HIDDEN = 256;
+#ifndef TSURUGI_NNUE_HIDDEN
+#define TSURUGI_NNUE_HIDDEN 256
+#endif
+
+// H is fixed at build time (-DTSURUGI_NNUE_HIDDEN=...); a file with another size is rejected.
+constexpr int HIDDEN = TSURUGI_NNUE_HIDDEN;
 constexpr int QA = 255;
 constexpr int QB = 64;
 constexpr int SCALE = 400;

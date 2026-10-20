@@ -10,7 +10,7 @@ import sys
 import chess
 import numpy as np
 
-H, QA, QB, SCALE = 256, 255, 64, 400
+QA, QB, SCALE = 255, 64, 400
 FENS = [
     "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
     "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1",
@@ -24,16 +24,17 @@ FENS = [
 def load(path):
     raw = open(path, "rb").read()
     assert raw[:4] == b"TSRG"
+    H = struct.unpack_from("<I", raw, 8)[0]
     o = 12
     ft_w = np.frombuffer(raw, np.int16, 768 * H, o).reshape(768, H).astype(np.int64); o += 768 * H * 2
     ft_b = np.frombuffer(raw, np.int16, H, o).astype(np.int64); o += H * 2
     out_w = np.frombuffer(raw, np.int16, 2 * H, o).astype(np.int64); o += 2 * H * 2
     out_b = struct.unpack_from("<i", raw, o)[0]
-    return ft_w, ft_b, out_w, out_b
+    return ft_w, ft_b, out_w, out_b, H
 
 
 def reference(net, board):
-    ft_w, ft_b, out_w, out_b = net
+    ft_w, ft_b, out_w, out_b, H = net
     acc = {c: ft_b.copy() for c in (chess.WHITE, chess.BLACK)}
     for sq, p in board.piece_map().items():
         idx = ((0 if p.color else 1) * 6 + p.piece_type - 1)

@@ -10,6 +10,8 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 option(TSURUGI_NATIVE "Tune for the build machine (-march=native)" OFF)
+set(TSURUGI_NNUE_HIDDEN 256 CACHE STRING "Hidden layer size of the network")
+add_compile_definitions(TSURUGI_NNUE_HIDDEN=${TSURUGI_NNUE_HIDDEN})
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
