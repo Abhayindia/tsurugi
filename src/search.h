@@ -32,6 +32,7 @@ struct SearchFeatures {
     bool counter_moves = true;
     bool staged_tt = true;
     bool cont_history = false;
+    bool iir = false;
 };
 
 extern SearchFeatures Features;
