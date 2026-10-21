@@ -40,6 +40,7 @@ All strength figures are SPRT results against the previous version (fastchess, U
 - Time management from the share of nodes on the best root move, best-move stability and score drops +29.5 ± 7.3 (3200 games, 8+0.08).
 - Expected cut nodes passed down the search (harder late move reductions, null move only at cut nodes) +7.1 ± 5.2 (6400 games, 8+0.08).
 - ProbCut +7.6 ± 5.2 (6400 games, 8+0.08).
+- Double singular extensions (capped per line) and stronger negative extensions +7.7 ± 5.0 (6400 games, 8+0.08).
 
 ### Engine
 - Fixed: a `stop` that arrived before the search thread started was lost, so the engine could search forever

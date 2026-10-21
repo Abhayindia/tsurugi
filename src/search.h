@@ -39,7 +39,7 @@ struct SearchFeatures {
     bool node_tm = true;
     bool cut_node = true;
     bool probcut = true;
-    bool singular_v2 = false;
+    bool singular_v2 = true;
     bool tt_pv = false;
 };
 
