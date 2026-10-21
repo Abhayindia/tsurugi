@@ -108,6 +108,7 @@ void Searcher::new_game() {
     std::fill(cont_.begin(), cont_.end(), 0);
     std::memset(corr_, 0, sizeof(corr_));
     std::memset(np_corr_, 0, sizeof(np_corr_));
+    std::fill(cont_corr_.begin(), cont_corr_.end(), 0);
     std::memset(capt_, 0, sizeof(capt_));
 }
 
@@ -129,10 +130,19 @@ int& Searcher::nonpawn_corr_entry(const Position& pos, Color side) {
     return np_corr_[pos.side_to_move()][side][h >> 50];
 }
 
-Value Searcher::corrected(const Position& pos, Value raw) {
+int* Searcher::cont_corr_entry(const Position& pos, int ply) {
+    if (ply < 2 || stack_[ply - 1].current == NO_MOVE || stack_[ply - 2].current == NO_MOVE) return nullptr;
+    const Frame &a = stack_[ply - 2], &b = stack_[ply - 1];
+    int i = ((int(pos.side_to_move()) * PIECE_NB + a.moved) * SQUARE_NB + to_sq(a.current)) * PIECE_NB + b.moved;
+    return &cont_corr_[i * SQUARE_NB + to_sq(b.current)];
+}
+
+Value Searcher::corrected(const Position& pos, Value raw, int ply) {
     if (!Features.corr_history || raw == VALUE_NONE) return raw;
     int c = corr_entry(pos);
     if (Features.nonpawn_corr) c += (nonpawn_corr_entry(pos, WHITE) + nonpawn_corr_entry(pos, BLACK)) / 2;
+    if (Features.cont_corr)
+        if (int* e = cont_corr_entry(pos, ply)) c += *e;
     return std::clamp(raw + c / 256, -VALUE_MATE_IN_MAX_PLY + 1, VALUE_MATE_IN_MAX_PLY - 1);
 }
 
@@ -268,7 +278,7 @@ Value Searcher::qsearch(Position& pos, Value alpha, Value beta, int ply) {
         best = -VALUE_MATE + ply;
     } else {
         raw_stand = evaluate(pos);
-        stand = corrected(pos, raw_stand);
+        stand = corrected(pos, raw_stand, ply);
         if (stand >= beta) return stand;
         alpha = std::max(alpha, stand);
         best = stand;
@@ -363,7 +373,7 @@ Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int p
 
     bool in_check = pos.in_check();
     Value raw_eval = in_check ? VALUE_NONE : tt_hit ? Value(tte.eval) : evaluate(pos);
-    Value eval = corrected(pos, raw_eval);
+    Value eval = corrected(pos, raw_eval, ply);
     stack_[ply].static_eval = eval;
     bool improving = !in_check && ply >= 2 && stack_[ply - 2].static_eval != VALUE_NONE &&
                      eval > stack_[ply - 2].static_eval;
@@ -595,6 +605,8 @@ Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int p
             update(nonpawn_corr_entry(pos, WHITE));
             update(nonpawn_corr_entry(pos, BLACK));
         }
+        if (Features.cont_corr)
+            if (int* e = cont_corr_entry(pos, ply)) update(*e);
     }
     TT.store(pos.key(), best_move, score_to_tt(best, ply), raw_eval == VALUE_NONE ? 0 : raw_eval, depth, b, tt_pv);
     return best;

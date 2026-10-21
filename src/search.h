@@ -46,6 +46,7 @@ struct SearchFeatures {
     bool iir_cut = false;
     bool lmr_history = false;
     bool cuckoo = false;
+    bool cont_corr = false;
 };
 
 extern SearchFeatures Features;
@@ -88,7 +89,8 @@ private:
     void update_capture_stats(const Position& pos, Move best, const Move* captures, int nc, int depth);
     int& corr_entry(const Position& pos);
     int& nonpawn_corr_entry(const Position& pos, Color side);
-    Value corrected(const Position& pos, Value raw);
+    int* cont_corr_entry(const Position& pos, int ply);
+    Value corrected(const Position& pos, Value raw, int ply);
     void setup_time(const Position& pos, const SearchLimits& limits);
     std::int64_t elapsed() const;
 
@@ -114,6 +116,8 @@ private:
     int corr_[COLOR_NB][CORR_SIZE] = {};
     // The same, keyed by one side's non-pawn pieces: [side to move][side whose pieces][key].
     int np_corr_[COLOR_NB][COLOR_NB][CORR_SIZE] = {};
+    // The same, keyed by the last two moves: [side to move][piece, to two plies up][piece, to one ply up].
+    std::vector<int> cont_corr_ = std::vector<int>(int(COLOR_NB) * PIECE_NB * SQUARE_NB * PIECE_NB * SQUARE_NB);
     std::vector<int> cont_ = std::vector<int>(int(PIECE_NB) * SQUARE_NB * PIECE_NB * SQUARE_NB);
     Frame stack_[MAX_PLY + 4] = {};
     Move pv_[MAX_PLY + 1][MAX_PLY + 1] = {};
