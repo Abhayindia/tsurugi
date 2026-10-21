@@ -522,7 +522,17 @@ Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int p
                 r = std::clamp(r, 0, std::max(new_depth - 1, 0));
             }
             v = -negamax(pos, -alpha - 1, -alpha, new_depth - r, ply + 1, true);
-            if (v > alpha && r > 0) v = -negamax(pos, -alpha - 1, -alpha, new_depth, ply + 1, !cut);
+            if (v > alpha && r > 0) {
+                v = -negamax(pos, -alpha - 1, -alpha, new_depth, ply + 1, !cut);
+                // The reduced search was wrong about this move: tell continuation history how it really did.
+                if (Features.lmr_history && Features.cont_history && quiet) {
+                    int bonus = std::min(new_depth * new_depth * 16, 1600);
+                    int b = v <= alpha ? -bonus : v >= beta ? bonus : 0;
+                    if (b)
+                        for (int back = 1; back <= 2; ++back)
+                            if (int* e = cont_entry(ply - back, stack_[ply].moved, to_sq(m))) history_update(*e, b);
+                }
+            }
             if (v > alpha && v < beta) v = -negamax(pos, -beta, -alpha, new_depth, ply + 1, false);
         }
         pos.unmake_move(m);
