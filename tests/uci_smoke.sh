@@ -35,4 +35,8 @@ check illegal_mv   "position startpos moves e2e5\n"                          100
 out=$({ printf "position startpos\ngo infinite\n"; sleep 1.5; echo stop; sleep 0.5; echo quit; } | timeout 10 "$ENGINE")
 if grep -q "^bestmove" <<<"$out" && grep -q "info depth" <<<"$out"; then echo "ok   infinite+stop"; else echo "FAIL infinite+stop"; fail=1; fi
 
+# A stop sent straight after go (before the search thread may have started) must still end the search.
+out=$({ printf "position startpos\ngo infinite\nstop\n"; sleep 0.5; echo quit; } | timeout 10 "$ENGINE")
+if grep -q "^bestmove" <<<"$out"; then echo "ok   immediate stop"; else echo "FAIL immediate stop"; fail=1; fi
+
 exit $fail

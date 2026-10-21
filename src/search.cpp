@@ -570,7 +570,6 @@ std::uint64_t Searcher::root_nodes_of(Move m) const {
 
 SearchResult Searcher::search(Position& pos, const SearchLimits& limits, bool verbose) {
     start_ = now_ms();
-    stop_.store(false);
     nodes_ = 0;
     node_limit_ = limits.nodes;
     setup_time(pos, limits);
@@ -670,6 +669,7 @@ std::uint64_t bench(Searcher& searcher, int depth) {
         searcher.new_game();
         SearchLimits lim;
         lim.depth = depth;
+        searcher.clear_stop();
         total += searcher.search(pos, lim, false).nodes;
     }
     std::int64_t ms = std::max<std::int64_t>(1, now_ms() - t0);

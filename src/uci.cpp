@@ -180,6 +180,7 @@ private:
         }
         lim.depth = std::clamp(lim.depth, 1, MAX_PLY - 1);
         search_pos_ = pos_;
+        searcher_.clear_stop();
         thread_ = std::thread([this, lim] {
             SearchResult r = searcher_.search(search_pos_, lim, true);
             std::cout << "bestmove " << move_to_uci(r.best) << std::endl;

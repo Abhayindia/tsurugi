@@ -57,6 +57,9 @@ public:
     SearchResult search(Position& pos, const SearchLimits& limits, bool verbose);
     void new_game();
     void request_stop() { stop_.store(true, std::memory_order_relaxed); }
+    // Clears a previous stop. Call it from the thread that issues stops, before starting the search, so a stop
+    // that arrives before the search thread runs is never lost.
+    void clear_stop() { stop_.store(false, std::memory_order_relaxed); }
     int move_overhead = 50;
 
 private:

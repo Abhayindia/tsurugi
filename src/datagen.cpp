@@ -71,6 +71,7 @@ void datagen(int games, std::uint64_t nodes, std::uint64_t seed, const std::stri
         if (!random_opening(pos, rng)) continue;
         TT.clear();
         searcher->new_game();
+        searcher->clear_stop();
         if (std::abs(searcher->search(pos, limits, false).score) > MAX_OPENING_SCORE) continue;
 
         std::vector<Sample> samples;
@@ -85,6 +86,7 @@ void datagen(int games, std::uint64_t nodes, std::uint64_t seed, const std::stri
             }
             if (pos.is_draw() || ply >= MAX_GAME_PLIES) break;
 
+            searcher->clear_stop();
             SearchResult r = searcher->search(pos, limits, false);
             Value white = pos.side_to_move() == WHITE ? r.score : -r.score;
 
