@@ -40,6 +40,7 @@ struct SearchFeatures {
     bool cut_node = true;
     bool probcut = true;
     bool singular_v2 = false;
+    bool tt_pv = false;
 };
 
 extern SearchFeatures Features;

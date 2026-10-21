@@ -340,6 +340,8 @@ Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int p
              (tte.bound() == BOUND_UPPER && tv <= alpha)))
             return tv;
     }
+    // Nodes that were once on the principal variation get searched a little wider.
+    bool tt_pv = Features.tt_pv && (pv || (tt_hit && tte.is_pv()));
 
     // No TT move at a deep node: search it shallower; the result fills the TT for the next visit.
     if (Features.iir && depth >= 4 && tt_move == NO_MOVE) --depth;
@@ -398,7 +400,7 @@ Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int p
                 pos.unmake_move(m);
                 if (stop_.load(std::memory_order_relaxed)) return 0;
                 if (v >= pc_beta) {
-                    TT.store(pos.key(), m, score_to_tt(v, ply), raw_eval, depth - 3, BOUND_LOWER);
+                    TT.store(pos.key(), m, score_to_tt(v, ply), raw_eval, depth - 3, BOUND_LOWER, tt_pv);
                     return v;
                 }
             }
@@ -494,6 +496,7 @@ Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int p
                 r -= improving;
                 r -= gives_check;
                 if (Features.cut_node) r += 2 * cut;
+                r -= tt_pv && !pv;
                 if (Features.cont_history)
                     r -= quiet_score(~pos.side_to_move(), m, stack_[ply].moved, ply) / 16384;
                 else
@@ -555,7 +558,7 @@ Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int p
         int w = std::min(depth + 1, 16);
         e = std::clamp((e * (256 - w) + (best - eval) * 256 * w) / 256, -96 * 256, 96 * 256);
     }
-    TT.store(pos.key(), best_move, score_to_tt(best, ply), raw_eval == VALUE_NONE ? 0 : raw_eval, depth, b);
+    TT.store(pos.key(), best_move, score_to_tt(best, ply), raw_eval == VALUE_NONE ? 0 : raw_eval, depth, b, tt_pv);
     return best;
 }
 

@@ -17,20 +17,21 @@ struct TTEntry {
     std::int16_t score;
     std::int16_t eval;
     std::uint8_t depth;
-    std::uint8_t gen_bound;  // generation in high 6 bits, bound in low 2
+    std::uint8_t gen_bound;  // generation in high 5 bits, PV flag in bit 2, bound in low 2
 
     Bound bound() const { return Bound(gen_bound & 3); }
+    bool is_pv() const { return gen_bound & 4; }
 };
 
 class TranspositionTable {
 public:
     void resize(std::size_t mb);
     void clear();
-    void new_search() { generation_ = (generation_ + 4) & 0xFC; }
+    void new_search() { generation_ = (generation_ + 8) & 0xF8; }
 
     bool probe(U64 key, TTEntry& out) const;
     void prefetch(U64 key) const { __builtin_prefetch(&table_[index(key)]); }
-    void store(U64 key, Move move, Value score, Value eval, int depth, Bound bound);
+    void store(U64 key, Move move, Value score, Value eval, int depth, Bound bound, bool pv = false);
     int hashfull() const;
 
 private:
