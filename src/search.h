@@ -45,6 +45,7 @@ struct SearchFeatures {
     bool lmr_terms = false;
     bool iir_cut = false;
     bool lmr_history = false;
+    bool cuckoo = false;
 };
 
 extern SearchFeatures Features;

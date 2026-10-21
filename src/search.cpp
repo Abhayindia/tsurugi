@@ -336,6 +336,10 @@ Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int p
         alpha = std::max(alpha, -VALUE_MATE + ply);
         beta = std::min(beta, VALUE_MATE - ply - 1);
         if (alpha >= beta) return alpha;
+        if (Features.cuckoo && alpha < VALUE_DRAW && pos.upcoming_repetition(ply)) {
+            alpha = VALUE_DRAW;
+            if (alpha >= beta) return alpha;
+        }
     }
 
     Move excluded = stack_[ply].excluded;

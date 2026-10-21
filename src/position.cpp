@@ -9,6 +9,14 @@
 
 namespace tsurugi {
 
+namespace {
+// Cuckoo tables of every reversible piece move, keyed by the Zobrist difference it makes.
+U64 cuckoo_key[8192];
+Move cuckoo_move[8192];
+int cuckoo_h1(U64 k) { return int(k & 0x1fff); }
+int cuckoo_h2(U64 k) { return int((k >> 16) & 0x1fff); }
+}  // namespace
+
 namespace zobrist {
 U64 psq[PIECE_NB][SQUARE_NB];
 U64 castling[16];
@@ -55,6 +63,23 @@ void Position::init() {
     castle_mask[E8] &= ~(BLACK_OO | BLACK_OOO);
     castle_mask[H8] &= ~BLACK_OO;
     castle_mask[A8] &= ~BLACK_OOO;
+
+    for (Piece pc = Piece(0); pc < PIECE_NB; pc = Piece(pc + 1)) {
+        if (type_of(pc) == PAWN) continue;
+        for (int s1 = 0; s1 < 64; ++s1)
+            for (int s2 = s1 + 1; s2 < 64; ++s2) {
+                if (!(attacks::piece(type_of(pc), s1, 0) & (1ULL << s2))) continue;
+                Move m = tsurugi::make_move(s1, s2);
+                U64 k = zobrist::psq[pc][s1] ^ zobrist::psq[pc][s2] ^ zobrist::side;
+                int i = cuckoo_h1(k);
+                while (true) {
+                    std::swap(cuckoo_key[i], k);
+                    std::swap(cuckoo_move[i], m);
+                    if (m == NO_MOVE) break;
+                    i = i == cuckoo_h1(k) ? cuckoo_h2(k) : cuckoo_h1(k);
+                }
+            }
+    }
 }
 
 void Position::put(Piece p, int s) {
@@ -407,6 +432,24 @@ bool Position::is_draw() const {
 
     U64 minors = pieces(KNIGHT) | pieces(BISHOP);
     return !(pieces(PAWN) | pieces(ROOK) | pieces(QUEEN)) && popcount(minors) <= 1;
+}
+
+bool Position::upcoming_repetition(int ply) const {
+    const StateInfo& st = states_.back();
+    int end = std::min(st.rule50, st.plies_from_null);
+    if (end < 3) return false;
+    int n = int(states_.size()) - 1;
+    for (int i = 3; i <= end && i < ply && n - i >= 0; i += 2) {
+        U64 diff = st.key ^ states_[n - i].key;
+        int j = cuckoo_h1(diff);
+        if (cuckoo_key[j] != diff) {
+            j = cuckoo_h2(diff);
+            if (cuckoo_key[j] != diff) continue;
+        }
+        Move m = cuckoo_move[j];
+        if (!(attacks::between[from_sq(m)][to_sq(m)] & occ_)) return true;
+    }
+    return false;
 }
 
 Move Position::parse_move(const std::string& uci) const {
