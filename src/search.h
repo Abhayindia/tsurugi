@@ -36,9 +36,9 @@ struct SearchFeatures {
     bool singular = true;
     bool corr_history = true;
     bool capt_history = false;
-    bool node_tm = false;
-    bool cut_node = false;
-    bool probcut = false;
+    bool node_tm = true;
+    bool cut_node = true;
+    bool probcut = true;
 };
 
 extern SearchFeatures Features;

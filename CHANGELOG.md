@@ -35,6 +35,9 @@ All strength figures are SPRT results against the previous version (fastchess, U
 - Continuation history (1- and 2-ply) for quiet move ordering and late move reductions +15.3 ± 7.6 (3200 games, 8+0.08).
 - Singular extensions with multi-cut and negative extensions +36.4 ± 7.3 (3200 games, 8+0.08).
 - Pawn-structure correction history of the static evaluation +15.3 ± 7.7 (3200 games, 8+0.08).
+- Time management from the share of nodes on the best root move, best-move stability and score drops +29.5 ± 7.3 (3200 games, 8+0.08).
+- Expected cut nodes passed down the search (harder late move reductions, null move only at cut nodes) +7.1 ± 5.2 (6400 games, 8+0.08).
+- ProbCut +7.6 ± 5.2 (6400 games, 8+0.08).
 
 ### Engine
 - Time management scales with the time control and never starts an iteration it cannot finish.
