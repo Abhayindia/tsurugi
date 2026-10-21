@@ -278,11 +278,7 @@ void Position::make_move(Move m) {
     int from = from_sq(m), to = to_sq(m), flag = move_flag(m);
     Piece pc = board_[from];
     U64 k = ns.key;
-    nnue::Accumulator* acc = nullptr;
-    if (nnue_enabled) {
-        acc_.push_back(acc_.back());
-        acc = &acc_.back();
-    }
+    nnue::Delta delta;
 
     ns.rule50++;
     ns.plies_from_null++;
@@ -296,12 +292,12 @@ void Position::make_move(Move m) {
         int cap = to - up(us);
         ns.captured = board_[cap];
         k ^= zobrist::psq[ns.captured][cap];
-        if (acc) nnue::sub(*acc, ns.captured, cap);
+        delta.sub(ns.captured, cap);
         remove(cap);
     } else if (flag & CAPTURE) {
         ns.captured = board_[to];
         k ^= zobrist::psq[ns.captured][to];
-        if (acc) nnue::sub(*acc, ns.captured, to);
+        delta.sub(ns.captured, to);
         remove(to);
     }
     if (ns.captured != NO_PIECE) ns.rule50 = 0;
@@ -311,12 +307,15 @@ void Position::make_move(Move m) {
         int rt = flag == KING_CASTLE ? to - 1 : to + 1;
         Piece rook = board_[rf];
         k ^= zobrist::psq[rook][rf] ^ zobrist::psq[rook][rt];
-        if (acc) nnue::move(*acc, rook, rf, rt);
+        delta.sub(rook, rf);
+        delta.add(rook, rt);
         relocate(rf, rt);
     }
 
     k ^= zobrist::psq[pc][from] ^ zobrist::psq[pc][to];
-    if (acc) nnue::move(*acc, pc, from, to);
+    int moved_add = delta.adds;
+    delta.sub(pc, from);
+    delta.add(pc, to);
     relocate(from, to);
 
     if (type_of(pc) == PAWN) {
@@ -329,10 +328,7 @@ void Position::make_move(Move m) {
             }
         } else if (is_promotion(m)) {
             Piece promo = make_piece(us, promo_type(m));
-            if (acc) {
-                nnue::sub(*acc, pc, to);
-                nnue::add(*acc, promo, to);
-            }
+            delta.add_p[moved_add] = promo;
             remove(to);
             put(promo, to);
             k ^= zobrist::psq[pc][to] ^ zobrist::psq[promo][to];
@@ -342,6 +338,11 @@ void Position::make_move(Move m) {
     k ^= zobrist::castling[ns.castling];
     ns.castling &= castle_mask[from] & castle_mask[to];
     k ^= zobrist::castling[ns.castling];
+
+    if (nnue_enabled) {
+        acc_.emplace_back();
+        nnue::update(acc_[acc_.size() - 2], acc_.back(), delta);
+    }
 
     k ^= zobrist::side;
     ns.key = k;

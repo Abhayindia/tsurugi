@@ -5,6 +5,10 @@
 #include <fstream>
 #include <memory>
 
+#if defined(__AVX2__)
+#include <immintrin.h>
+#endif
+
 namespace tsurugi::nnue {
 
 namespace {
@@ -74,14 +78,51 @@ void move(Accumulator& acc, Piece p, int from, int to) {
     }
 }
 
+void update(const Accumulator& src, Accumulator& dst, const Delta& d) {
+    for (int c = 0; c < COLOR_NB; ++c) {
+        const std::int16_t* __restrict s = src.v[c];
+        std::int16_t* __restrict o = dst.v[c];
+        const std::int16_t* a0 = net.ft_w[feature(Color(c), d.add_p[0], d.add_s[0])];
+        const std::int16_t* s0 = net.ft_w[feature(Color(c), d.sub_p[0], d.sub_s[0])];
+        if (d.adds == 1 && d.subs == 1) {
+            for (int i = 0; i < HIDDEN; ++i) o[i] = s[i] + a0[i] - s0[i];
+        } else if (d.adds == 1 && d.subs == 2) {
+            const std::int16_t* s1 = net.ft_w[feature(Color(c), d.sub_p[1], d.sub_s[1])];
+            for (int i = 0; i < HIDDEN; ++i) o[i] = s[i] + a0[i] - s0[i] - s1[i];
+        } else {
+            const std::int16_t* a1 = net.ft_w[feature(Color(c), d.add_p[1], d.add_s[1])];
+            const std::int16_t* s1 = net.ft_w[feature(Color(c), d.sub_p[1], d.sub_s[1])];
+            for (int i = 0; i < HIDDEN; ++i) o[i] = s[i] + a0[i] + a1[i] - s0[i] - s1[i];
+        }
+    }
+}
+
 Value evaluate(const Accumulator& acc, Color stm) {
     const std::int16_t* us = acc.v[stm];
     const std::int16_t* them = acc.v[~stm];
     std::int32_t sum = 0;
+#if defined(__AVX2__)
+    // Clipped ReLU on 16 neurons at a time, then multiply-add pairs into 8 int32 lanes (same integer result).
+    const __m256i zero = _mm256_setzero_si256(), qa = _mm256_set1_epi16(QA);
+    __m256i acc32 = _mm256_setzero_si256();
+    for (int i = 0; i < HIDDEN; i += 16) {
+        __m256i u = _mm256_load_si256(reinterpret_cast<const __m256i*>(us + i));
+        __m256i t = _mm256_load_si256(reinterpret_cast<const __m256i*>(them + i));
+        u = _mm256_min_epi16(_mm256_max_epi16(u, zero), qa);
+        t = _mm256_min_epi16(_mm256_max_epi16(t, zero), qa);
+        acc32 = _mm256_add_epi32(acc32, _mm256_madd_epi16(u, _mm256_load_si256(reinterpret_cast<const __m256i*>(net.out_w + i))));
+        acc32 = _mm256_add_epi32(acc32, _mm256_madd_epi16(t, _mm256_load_si256(reinterpret_cast<const __m256i*>(net.out_w + HIDDEN + i))));
+    }
+    __m128i s128 = _mm_add_epi32(_mm256_castsi256_si128(acc32), _mm256_extracti128_si256(acc32, 1));
+    s128 = _mm_add_epi32(s128, _mm_shuffle_epi32(s128, 0x4E));
+    s128 = _mm_add_epi32(s128, _mm_shuffle_epi32(s128, 0xB1));
+    sum = _mm_cvtsi128_si32(s128);
+#else
     for (int i = 0; i < HIDDEN; ++i) {
         sum += std::clamp<std::int32_t>(us[i], 0, QA) * net.out_w[i];
         sum += std::clamp<std::int32_t>(them[i], 0, QA) * net.out_w[HIDDEN + i];
     }
+#endif
     std::int64_t v = (std::int64_t(sum) + net.out_b) * SCALE / (QA * QB);
     return Value(std::clamp<std::int64_t>(v, -VALUE_MATE_IN_MAX_PLY + 1, VALUE_MATE_IN_MAX_PLY - 1));
 }

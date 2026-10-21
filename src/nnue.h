@@ -37,6 +37,17 @@ void refresh(Accumulator& acc, const Piece board[SQUARE_NB]);
 void add(Accumulator& acc, Piece p, int s);
 void sub(Accumulator& acc, Piece p, int s);
 void move(Accumulator& acc, Piece p, int from, int to);
+
+// A move's effect on the inputs: at most two pieces appear and two disappear.
+struct Delta {
+    Piece add_p[2], sub_p[2];
+    int add_s[2], sub_s[2];
+    int adds = 0, subs = 0;
+    void add(Piece p, int s) { add_p[adds] = p; add_s[adds++] = s; }
+    void sub(Piece p, int s) { sub_p[subs] = p; sub_s[subs++] = s; }
+};
+// dst = src + the delta, in one pass over the accumulator.
+void update(const Accumulator& src, Accumulator& dst, const Delta& d);
 Value evaluate(const Accumulator& acc, Color stm);
 
 }  // namespace tsurugi::nnue
