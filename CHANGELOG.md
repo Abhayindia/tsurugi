@@ -41,6 +41,8 @@ All strength figures are SPRT results against the previous version (fastchess, U
 - Expected cut nodes passed down the search (harder late move reductions, null move only at cut nodes) +7.1 ± 5.2 (6400 games, 8+0.08).
 - ProbCut +7.6 ± 5.2 (6400 games, 8+0.08).
 - Double singular extensions (capped per line) and stronger negative extensions +7.7 ± 5.0 (6400 games, 8+0.08).
+- Correction history keyed by each side's non-pawn pieces +18.4 ± 6.9 (3200 games, 8+0.08).
+- TT flag for nodes that were once on the principal variation, reduced less +4.1 ± 3.1 (16000 games, 8+0.08).
 
 ### Engine
 - AVX2 kernel for the network output and single-pass accumulator updates: the same search in roughly half the

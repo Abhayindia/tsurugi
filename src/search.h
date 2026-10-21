@@ -35,13 +35,13 @@ struct SearchFeatures {
     bool iir = false;
     bool singular = true;
     bool corr_history = true;
-    bool nonpawn_corr = false;
+    bool nonpawn_corr = true;
     bool capt_history = false;
     bool node_tm = true;
     bool cut_node = true;
     bool probcut = true;
     bool singular_v2 = true;
-    bool tt_pv = false;
+    bool tt_pv = true;
     bool lmr_terms = false;
     bool lmr_history = false;
 };
