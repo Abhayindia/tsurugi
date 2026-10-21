@@ -29,7 +29,7 @@ jobs:
         with: {ref: "${{ inputs.ref }}"}
       - name: Build
         run: |
-          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DTSURUGI_NATIVE=OFF -DTSURUGI_DEFAULT_NET= > /dev/null
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DTSURUGI_NATIVE=ON -DTSURUGI_USE_PEXT=OFF -DTSURUGI_DEFAULT_NET= > /dev/null
           cmake --build build -j"$(nproc)" --target tsurugi > /dev/null
           if [ -n "${{ inputs.net }}" ]; then cp "${{ inputs.net }}" build/tsurugi.nnue; fi
       - name: Generate

@@ -31,7 +31,7 @@ jobs:
         with: {ref: "${{ inputs.ref }}", path: engine}
       - name: Build engine
         run: |
-          cmake -S engine -B engine/build -DCMAKE_BUILD_TYPE=Release -DTSURUGI_NATIVE=OFF > /dev/null
+          cmake -S engine -B engine/build -DCMAKE_BUILD_TYPE=Release -DTSURUGI_NATIVE=ON -DTSURUGI_USE_PEXT=OFF > /dev/null
           cmake --build engine/build -j"$(nproc)" --target tsurugi > /dev/null
           net="${{ inputs.net }}"
           if [ -n "$net" ] && [ -f "engine/$net" ]; then cp "engine/$net" engine/build/tsurugi.nnue; fi

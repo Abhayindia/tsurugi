@@ -37,7 +37,7 @@ jobs:
           for e in new base; do
             net="${{ inputs.net }}"
             if [ $e = new ] && [ -n "${{ inputs.new_net }}" ]; then net="${{ inputs.new_net }}"; fi
-            cmake -S $e -B $e/build -DCMAKE_BUILD_TYPE=Release -DTSURUGI_NATIVE=OFF > /dev/null
+            cmake -S $e -B $e/build -DCMAKE_BUILD_TYPE=Release -DTSURUGI_NATIVE=ON -DTSURUGI_USE_PEXT=OFF > /dev/null
             cmake --build $e/build -j"$(nproc)" --target tsurugi > /dev/null
             if [ -n "$net" ] && [ -f "$e/$net" ]; then cp "$e/$net" $e/build/tsurugi.nnue; fi
           done
