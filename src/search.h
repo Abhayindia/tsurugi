@@ -35,6 +35,7 @@ struct SearchFeatures {
     bool iir = false;
     bool singular = true;
     bool corr_history = true;
+    bool nonpawn_corr = false;
     bool capt_history = false;
     bool node_tm = true;
     bool cut_node = true;
@@ -82,6 +83,7 @@ private:
     int& capt_entry(const Position& pos, Move m);
     void update_capture_stats(const Position& pos, Move best, const Move* captures, int nc, int depth);
     int& corr_entry(const Position& pos);
+    int& nonpawn_corr_entry(const Position& pos, Color side);
     Value corrected(const Position& pos, Value raw);
     void setup_time(const Position& pos, const SearchLimits& limits);
     std::int64_t elapsed() const;
@@ -106,6 +108,8 @@ private:
     // Correction history: running average of (search result - static eval) per pawn structure, x256.
     static constexpr int CORR_SIZE = 16384;
     int corr_[COLOR_NB][CORR_SIZE] = {};
+    // The same, keyed by one side's non-pawn pieces: [side to move][side whose pieces][key].
+    int np_corr_[COLOR_NB][COLOR_NB][CORR_SIZE] = {};
     std::vector<int> cont_ = std::vector<int>(int(PIECE_NB) * SQUARE_NB * PIECE_NB * SQUARE_NB);
     Frame stack_[MAX_PLY + 4] = {};
     Move pv_[MAX_PLY + 1][MAX_PLY + 1] = {};

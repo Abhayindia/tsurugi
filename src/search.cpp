@@ -107,6 +107,7 @@ void Searcher::new_game() {
     std::memset(stack_, 0, sizeof(stack_));
     std::fill(cont_.begin(), cont_.end(), 0);
     std::memset(corr_, 0, sizeof(corr_));
+    std::memset(np_corr_, 0, sizeof(np_corr_));
     std::memset(capt_, 0, sizeof(capt_));
 }
 
@@ -120,9 +121,19 @@ int& Searcher::corr_entry(const Position& pos) {
     return corr_[pos.side_to_move()][h >> 50];
 }
 
+int& Searcher::nonpawn_corr_entry(const Position& pos, Color side) {
+    static constexpr U64 MUL[PIECE_TYPE_NB] = {0, 0x9E3779B97F4A7C15ULL, 0xC2B2AE3D27D4EB4FULL, 0x165667B19E3779F9ULL,
+                                               0xD6E8FEB86659FD93ULL, 0xFF51AFD7ED558CCDULL};
+    U64 h = 0;
+    for (int pt = KNIGHT; pt <= KING; ++pt) h ^= pos.pieces(side, PieceType(pt)) * MUL[pt];
+    return np_corr_[pos.side_to_move()][side][h >> 50];
+}
+
 Value Searcher::corrected(const Position& pos, Value raw) {
     if (!Features.corr_history || raw == VALUE_NONE) return raw;
-    return std::clamp(raw + corr_entry(pos) / 256, -VALUE_MATE_IN_MAX_PLY + 1, VALUE_MATE_IN_MAX_PLY - 1);
+    int c = corr_entry(pos);
+    if (Features.nonpawn_corr) c += (nonpawn_corr_entry(pos, WHITE) + nonpawn_corr_entry(pos, BLACK)) / 2;
+    return std::clamp(raw + c / 256, -VALUE_MATE_IN_MAX_PLY + 1, VALUE_MATE_IN_MAX_PLY - 1);
 }
 
 // The continuation-history entry for piece p moving to `to`, following the move made `ply` plies up the stack.
@@ -554,9 +565,15 @@ Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int p
     if (Features.corr_history && !in_check && std::abs(best) < VALUE_MATE_IN_MAX_PLY &&
         (best_move == NO_MOVE || (!is_capture(best_move) && !is_promotion(best_move))) &&
         !(b == BOUND_LOWER && best <= eval) && !(b == BOUND_UPPER && best >= eval)) {
-        int& e = corr_entry(pos);
         int w = std::min(depth + 1, 16);
-        e = std::clamp((e * (256 - w) + (best - eval) * 256 * w) / 256, -96 * 256, 96 * 256);
+        auto update = [&](int& e) {
+            e = std::clamp((e * (256 - w) + (best - eval) * 256 * w) / 256, -96 * 256, 96 * 256);
+        };
+        update(corr_entry(pos));
+        if (Features.nonpawn_corr) {
+            update(nonpawn_corr_entry(pos, WHITE));
+            update(nonpawn_corr_entry(pos, BLACK));
+        }
     }
     TT.store(pos.key(), best_move, score_to_tt(best, ply), raw_eval == VALUE_NONE ? 0 : raw_eval, depth, b, tt_pv);
     return best;
