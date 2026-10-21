@@ -53,7 +53,7 @@ the previous version; the full record is in [docs/elo_history.md](docs/elo_histo
 
 Gains are measured against the version before each change, so they are not additive.
 
-**Calibration:** 3066 ± 18 Elo with network v4 (3030 ± 19 with v3, 2941 ± 19 with v2) on Stockfish's `UCI_Elo` scale (1200 games at 10+0.1 against Stockfish 17.1 limited to
+**Calibration:** 3123 ± 18 Elo with network v5 (3066 ± 18 with v4, 3030 ± 19 with v3, 2941 ± 19 with v2) on Stockfish's `UCI_Elo` scale (1200 games at 10+0.1 against Stockfish 17.1 limited to
 2850, 3000 and 3190). That scale is calibrated by Stockfish at longer time controls, so treat it as an
 approximation rather than a rating-list figure.
 
