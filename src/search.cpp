@@ -355,7 +355,7 @@ Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int p
     bool tt_pv = Features.tt_pv && (pv || (tt_hit && tte.is_pv()));
 
     // No TT move at a deep node: search it shallower; the result fills the TT for the next visit.
-    if (Features.iir && depth >= 4 && tt_move == NO_MOVE) --depth;
+    if ((Features.iir || (Features.iir_cut && (pv || cut))) && depth >= 4 && tt_move == NO_MOVE) --depth;
 
     bool in_check = pos.in_check();
     Value raw_eval = in_check ? VALUE_NONE : tt_hit ? Value(tte.eval) : evaluate(pos);
