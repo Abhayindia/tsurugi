@@ -42,6 +42,7 @@ struct SearchFeatures {
     bool probcut = true;
     bool singular_v2 = true;
     bool tt_pv = false;
+    bool lmr_terms = false;
 };
 
 extern SearchFeatures Features;

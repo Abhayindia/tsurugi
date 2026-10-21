@@ -508,6 +508,13 @@ Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int p
                 r -= gives_check;
                 if (Features.cut_node) r += 2 * cut;
                 r -= tt_pv && !pv;
+                if (Features.lmr_terms) {
+                    // Trust a deep TT entry, distrust nodes whose TT move is a capture, and reduce less where
+                    // the static eval needed a big correction (an uncertain position).
+                    r -= tt_hit && tte.depth >= depth;
+                    r += tt_move != NO_MOVE && (is_capture(tt_move) || is_promotion(tt_move));
+                    r -= raw_eval != VALUE_NONE && std::abs(eval - raw_eval) > 60;
+                }
                 if (Features.cont_history)
                     r -= quiet_score(~pos.side_to_move(), m, stack_[ply].moved, ply) / 16384;
                 else
