@@ -38,7 +38,7 @@ const Toggle TOGGLES[] = {
     {"IIR", &Features.iir},   {"Singular", &Features.singular},
     {"CorrHistory", &Features.corr_history}, {"CaptHistory", &Features.capt_history},
     {"NodeTM", &Features.node_tm},   {"CutNode", &Features.cut_node},
-    {"ProbCut", &Features.probcut},
+    {"ProbCut", &Features.probcut},   {"SingularV2", &Features.singular_v2},
     {"EvalMobility", &EvalTerms.mobility},   {"EvalPawnStructure", &EvalTerms.pawn_structure},
     {"EvalPassedPawns", &EvalTerms.passed_pawns}, {"EvalPassedPawns2", &EvalTerms.passed_pawns2},
     {"EvalKingSafety", &EvalTerms.king_safety},

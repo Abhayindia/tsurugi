@@ -366,6 +366,7 @@ Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int p
             int r = 3 + depth / 4 + std::min((eval - beta) / 200, 3);
             stack_[ply].current = NO_MOVE;
             stack_[ply].moved = NO_PIECE;
+            stack_[ply + 1].double_ext = stack_[ply].double_ext;
             pos.make_null();
             Value v = -negamax(pos, -beta, -beta + 1, depth - 1 - r, ply + 1, !cut);
             pos.unmake_null();
@@ -457,9 +458,11 @@ Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int p
             Value sv = negamax(pos, sbeta - 1, sbeta, (depth - 1) / 2, ply, cut);
             stack_[ply].excluded = NO_MOVE;
             if (stop_.load(std::memory_order_relaxed)) return 0;
-            if (sv < sbeta) extension = 1;
+            if (sv < sbeta)
+                extension = Features.singular_v2 && !pv && sv < sbeta - 20 && stack_[ply].double_ext < 8 ? 2 : 1;
             else if (sbeta >= beta) return sbeta;
-            else if (tt_value >= beta) extension = -1;
+            else if (tt_value >= beta) extension = Features.singular_v2 ? -2 : -1;
+            else if (Features.singular_v2 && cut) extension = -1;
         }
 
         if (!root && best > -VALUE_MATE_IN_MAX_PLY && pos.has_non_pawn_material(pos.side_to_move())) {
@@ -472,6 +475,7 @@ Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int p
 
         ++legal;
         std::uint64_t nodes_before = nodes_;
+        stack_[ply + 1].double_ext = stack_[ply].double_ext + (extension >= 2);
         stack_[ply].current = m;
         stack_[ply].moved = pos.piece_on(from_sq(m));
         pos.make_move(m);

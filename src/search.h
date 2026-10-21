@@ -39,6 +39,7 @@ struct SearchFeatures {
     bool node_tm = true;
     bool cut_node = true;
     bool probcut = true;
+    bool singular_v2 = false;
 };
 
 extern SearchFeatures Features;
@@ -64,6 +65,7 @@ private:
         Piece moved;
         Value static_eval;
         Move excluded;
+        int double_ext;  // double extensions already made on the path to this node
     };
 
     Value negamax(Position& pos, Value alpha, Value beta, int depth, int ply, bool cut);
