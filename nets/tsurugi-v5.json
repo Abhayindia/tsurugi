@@ -1,0 +1,104 @@
+{
+ "data": "/kaggle/input/notebooks/abhaychaudhary01/tsurugi-lichess-shards/shards",
+ "positions": 220000000,
+ "hidden": 1024,
+ "epochs": 15,
+ "batch": 16384,
+ "lr": 0.001,
+ "wdl": 0.0,
+ "scale": 400.0,
+ "qa": 255,
+ "qb": 64,
+ "history": [
+  {
+   "epoch": 1,
+   "train_loss": 0.00683521920062126,
+   "val_loss": 0.006273635489983851,
+   "seconds": 756
+  },
+  {
+   "epoch": 2,
+   "train_loss": 0.006095386493532129,
+   "val_loss": 0.005991485615548259,
+   "seconds": 757
+  },
+  {
+   "epoch": 3,
+   "train_loss": 0.005900100661628514,
+   "val_loss": 0.005865954645116533,
+   "seconds": 757
+  },
+  {
+   "epoch": 4,
+   "train_loss": 0.0058016090045221675,
+   "val_loss": 0.0057986915374666345,
+   "seconds": 755
+  },
+  {
+   "epoch": 5,
+   "train_loss": 0.005742231908177894,
+   "val_loss": 0.005754047324430876,
+   "seconds": 755
+  },
+  {
+   "epoch": 6,
+   "train_loss": 0.0055717184188518116,
+   "val_loss": 0.0056179806133074385,
+   "seconds": 754
+  },
+  {
+   "epoch": 7,
+   "train_loss": 0.005542864118303572,
+   "val_loss": 0.005606310885247245,
+   "seconds": 754
+  },
+  {
+   "epoch": 8,
+   "train_loss": 0.005529288318019508,
+   "val_loss": 0.005596321607597145,
+   "seconds": 756
+  },
+  {
+   "epoch": 9,
+   "train_loss": 0.005518924863867484,
+   "val_loss": 0.005593648356936013,
+   "seconds": 755
+  },
+  {
+   "epoch": 10,
+   "train_loss": 0.005510100622669904,
+   "val_loss": 0.005589283273995034,
+   "seconds": 755
+  },
+  {
+   "epoch": 11,
+   "train_loss": 0.005453769486725874,
+   "val_loss": 0.0055464539507258555,
+   "seconds": 754
+  },
+  {
+   "epoch": 12,
+   "train_loss": 0.005446465906763512,
+   "val_loss": 0.005542653275231336,
+   "seconds": 754
+  },
+  {
+   "epoch": 13,
+   "train_loss": 0.005442948616746711,
+   "val_loss": 0.005541820712664535,
+   "seconds": 754
+  },
+  {
+   "epoch": 14,
+   "train_loss": 0.005440023242521431,
+   "val_loss": 0.005541492075240412,
+   "seconds": 755
+  },
+  {
+   "epoch": 15,
+   "train_loss": 0.005437433538465877,
+   "val_loss": 0.0055401122619893025,
+   "seconds": 756
+  }
+ ]
+}
