@@ -32,7 +32,7 @@ the previous version; the full record is in [docs/elo_history.md](docs/elo_histo
 - Move ordering by TT move, MVV-LVA, killer moves and history
 
 **Evaluation**
-- NNUE: 768 → 2×1024 → 1 network with clipped-ReLU activations, int16 quantisation and incrementally
+- NNUE: 768 → 2×1536 → 1 network with clipped-ReLU activations, int16 quantisation and incrementally
   updated accumulators, trained with Tsurugi's own PyTorch trainer ([scripts/nnue](scripts/nnue))
 - A hand-crafted tapered evaluation (material, piece-square tables, mobility, king safety, rook files) is used when
   no network is loaded
@@ -46,6 +46,7 @@ the previous version; the full record is in [docs/elo_history.md](docs/elo_histo
 | Network v3 over v2 (8+0.08) | +50.2 ± 8.1 |
 | Network v4 over v3 (8+0.08) | +47.9 ± 8.2 |
 | Network v5 over v4 (8+0.08) | +10.4 ± 5.5 |
+| Network v6 over v5 (8+0.08) | +12.1 ± 7.5 |
 | Late move reductions | +144.8 ± 27.7 |
 | Null-move pruning | +137.6 ± 28.1 |
 | Aspiration windows | +78.3 ± 21.7 |

@@ -13,8 +13,10 @@ All strength figures are SPRT results against the previous version (fastchess, U
   (3200 games, 8+0.08).
 - Network v4 (768 → 2×512 → 1, 160M Lichess positions, 20 epochs, trained on a Kaggle GPU):
   +47.9 ± 8.2 over v3 (3200 games, 8+0.08).
-- Network v5 (768 → 2×1024 → 1, 220M Lichess positions, 15 epochs, trained on a Kaggle GPU) is the default:
-  +10.4 ± 5.5 over v4 (6400 games, 8+0.08). The default build now uses a 1024-neuron hidden layer.
+- Network v5 (768 → 2×1024 → 1, 220M Lichess positions, 15 epochs, trained on a Kaggle GPU):
+  +10.4 ± 5.5 over v4 (6400 games, 8+0.08).
+- Network v6 (768 → 2×1536 → 1, 250M Lichess positions, 15 epochs, trained on a Kaggle GPU) is the default:
+  +12.1 ± 7.5 over v5 (3200 games, 8+0.08). The default build now uses a 1536-neuron hidden layer.
 - Hand-crafted evaluation terms (used without a network): mobility +77.8 ± 21.3, rook on open and semi-open files
   +37.6 ± 15.0, king safety +18.1 ± 10.0. Passed pawns (−18.8 ± 11.8) was rejected. Pawn structure failed on top
   of five terms (−7.3 ± 7.9) but passed a 12800-game retest on top of nine (+5.8 ± 4.6, 8+0.08); it stays off by

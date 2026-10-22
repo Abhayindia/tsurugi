@@ -10,7 +10,7 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 option(TSURUGI_NATIVE "Tune for the build machine (-march=native)" OFF)
-set(TSURUGI_NNUE_HIDDEN 1024 CACHE STRING "Hidden layer size of the network")
+set(TSURUGI_NNUE_HIDDEN 1536 CACHE STRING "Hidden layer size of the network")
 add_compile_definitions(TSURUGI_NNUE_HIDDEN=${TSURUGI_NNUE_HIDDEN})
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
@@ -48,7 +48,7 @@ add_executable(tsurugi src/main.cpp)
 target_link_libraries(tsurugi PRIVATE tsurugi_core)
 
 # The engine loads tsurugi.nnue from its own directory; ship the default network with every build.
-set(TSURUGI_DEFAULT_NET "${CMAKE_SOURCE_DIR}/nets/tsurugi-v5.nnue" CACHE FILEPATH "Network copied next to the binary")
+set(TSURUGI_DEFAULT_NET "${CMAKE_SOURCE_DIR}/nets/tsurugi-v6.nnue" CACHE FILEPATH "Network copied next to the binary")
 if(EXISTS "${TSURUGI_DEFAULT_NET}")
   configure_file("${TSURUGI_DEFAULT_NET}" "${CMAKE_BINARY_DIR}/tsurugi.nnue" COPYONLY)
 endif()

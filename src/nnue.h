@@ -11,7 +11,7 @@ namespace tsurugi::nnue {
 //   "TSRG" | u32 version=1 | u32 hidden=H | i16 ft_w[768][H] | i16 ft_b[H] | i16 out_w[2H] | i32 out_b
 // Inputs: 768 piece-square features per perspective; hidden = clamp(acc, 0, QA); output scaled by SCALE/(QA*QB).
 #ifndef TSURUGI_NNUE_HIDDEN
-#define TSURUGI_NNUE_HIDDEN 1024
+#define TSURUGI_NNUE_HIDDEN 1536
 #endif
 
 // H is fixed at build time (-DTSURUGI_NNUE_HIDDEN=...); a file with another size is rejected.
