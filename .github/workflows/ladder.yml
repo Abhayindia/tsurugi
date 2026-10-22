@@ -1,0 +1,85 @@
+name: ladder
+run-name: ladder ${{ inputs.run_tag }}
+
+# Tsurugi against other open-source engines built from source (one thread each, UHO openings), to place it on the
+# CCRL scale once Stockfish's UCI_Elo levels saturate. Results per opponent are uploaded as artifacts.
+on:
+  workflow_dispatch:
+    inputs:
+      run_tag: {description: "unique name of this run", required: true}
+      ref: {description: "commit of the engine", required: true}
+      opponents: {description: "JSON array of opponents (weiss, laser)", default: "[\"weiss\",\"laser\"]"}
+      shards: {description: "JSON array of shard numbers per opponent", default: "[1,2]"}
+      pairs: {description: "game pairs per shard", default: "100"}
+      tc: {description: "time control", default: "10+0.1"}
+      seed_offset: {description: "added to the shard number to seed the opening order", default: "0"}
+      net: {description: "network in the repo placed next to the binary", default: "nets/tsurugi-v7.nnue"}
+
+jobs:
+  play:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      max-parallel: 8
+      matrix:
+        opponent: ${{ fromJSON(inputs.opponents) }}
+        shard: ${{ fromJSON(inputs.shards) }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {ref: "${{ inputs.ref }}", path: engine}
+      - name: Build Tsurugi
+        run: |
+          cmake -S engine -B engine/build -DCMAKE_BUILD_TYPE=Release -DTSURUGI_NATIVE=ON -DTSURUGI_USE_PEXT=OFF > /dev/null
+          cmake --build engine/build -j"$(nproc)" --target tsurugi > /dev/null
+          net="${{ inputs.net }}"
+          if [ -n "$net" ] && [ -f "engine/$net" ]; then cp "engine/$net" engine/build/tsurugi.nnue; fi
+      - name: Build opponent
+        run: |
+          case "${{ matrix.opponent }}" in
+            weiss)
+              git clone -q --depth 1 --branch v2.0 https://github.com/TerjeKir/weiss.git opp
+              make -C opp/src -j"$(nproc)" > build.log 2>&1 || { tail -30 build.log; exit 1; }
+              cp "$(find opp -maxdepth 2 -type f -name 'weiss*' -perm -u+x | head -1)" opponent ;;
+            laser)
+              git clone -q --depth 1 https://github.com/jeffreyan11/uci-chess-engine.git opp
+              make -C opp -j"$(nproc)" > build.log 2>&1 || { tail -30 build.log; exit 1; }
+              cp "$(find opp -maxdepth 2 -type f -name 'laser*' -perm -u+x | head -1)" opponent ;;
+            *) echo "unknown opponent"; exit 1 ;;
+          esac
+          ls -l opponent
+          printf "uci\nisready\nquit\n" | ./opponent | grep -E "^id name|readyok"
+      - uses: actions/cache@v4
+        id: fc
+        with: {path: fastchess/fastchess, key: fastchess-ebfd64c}
+      - name: Build fastchess
+        if: steps.fc.outputs.cache-hit != 'true'
+        run: |
+          git clone -q https://github.com/Disservin/fastchess.git && git -C fastchess checkout -q ebfd64c
+          make -C fastchess -j"$(nproc)" > /dev/null
+      - uses: actions/cache@v4
+        id: book
+        with: {path: UHO_Lichess_4852_v1.epd, key: book-uho-4852-v1}
+      - name: Fetch book
+        if: steps.book.outputs.cache-hit != 'true'
+        run: |
+          curl -sL -o book.zip https://github.com/official-stockfish/books/raw/master/UHO_Lichess_4852_v1.epd.zip
+          unzip -q book.zip
+      - name: Play
+        run: |
+          seed=$(( ${{ inputs.seed_offset }} + ${{ matrix.shard }} * 7919 ))
+          ./fastchess/fastchess \
+            -engine cmd=engine/build/tsurugi name=tsurugi option.Hash=16 \
+            -engine cmd=./opponent name=${{ matrix.opponent }} option.Hash=16 option.Threads=1 \
+            -each tc=${{ inputs.tc }} proto=uci \
+            -openings file=UHO_Lichess_4852_v1.epd format=epd order=random -srand $seed \
+            -repeat -games 2 -rounds ${{ inputs.pairs }} -concurrency "$(nproc)" -recover \
+            -ratinginterval 1000000 > games.log 2>&1 || true
+          tail -20 games.log
+          { echo "opponent ${{ matrix.opponent }}"
+            grep -E "^Games: " games.log | tail -1
+            echo "timeouts $(grep -ciE 'tsurugi loses on time' games.log || true)"; } > result.txt
+          cat result.txt
+          grep -q "^Games: " result.txt
+      - uses: actions/upload-artifact@v4
+        with: {name: "ladder-${{ matrix.opponent }}-${{ matrix.shard }}", path: result.txt, retention-days: 30}
