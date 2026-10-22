@@ -39,11 +39,12 @@ jobs:
           case "${{ matrix.opponent }}" in
             weiss)
               git clone -q --depth 1 --branch v2.0 https://github.com/TerjeKir/weiss.git opp
+              sed -i 's/-Werror//g' opp/src/makefile
               make -C opp/src -j"$(nproc)" > build.log 2>&1 || { tail -30 build.log; exit 1; }
               cp "$(find opp -maxdepth 2 -type f -name 'weiss*' -perm -u+x | head -1)" opponent ;;
             laser)
               git clone -q --depth 1 https://github.com/jeffreyan11/uci-chess-engine.git opp
-              make -C opp -j"$(nproc)" > build.log 2>&1 || { tail -30 build.log; exit 1; }
+              make -C opp/src -j"$(nproc)" > build.log 2>&1 || { tail -30 build.log; exit 1; }
               cp "$(find opp -maxdepth 2 -type f -name 'laser*' -perm -u+x | head -1)" opponent ;;
             *) echo "unknown opponent"; exit 1 ;;
           esac
