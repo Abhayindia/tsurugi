@@ -44,6 +44,8 @@ struct SearchFeatures {
     bool tt_pv = true;
     bool lmr_terms = false;
     bool iir_cut = false;
+    bool unc_prune = false;
+    bool unc_lmr = false;
     bool lmr_history = false;
     bool cuckoo = false;
     bool cont_corr = false;

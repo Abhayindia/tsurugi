@@ -2,6 +2,7 @@
 
 #include "eval.h"
 #include "movegen.h"
+#include "nnue.h"
 #include "tt.h"
 
 #include <algorithm>
@@ -374,16 +375,21 @@ Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int p
     bool in_check = pos.in_check();
     Value raw_eval = in_check ? VALUE_NONE : tt_hit ? Value(tte.eval) : evaluate(pos);
     Value eval = corrected(pos, raw_eval, ply);
+    // The network's own estimate of how wrong this static eval is (cp); -1 when unused or unavailable.
+    int unc = -1;
+    if ((Features.unc_prune || Features.unc_lmr) && !in_check && Position::nnue_enabled && nnue::has_uncertainty())
+        unc = nnue::uncertainty(pos.accumulator(), pos.side_to_move(), popcount(pos.pieces()));
+    int unc_margin = Features.unc_prune && unc > 0 ? unc / 2 : 0;
     stack_[ply].static_eval = eval;
     bool improving = !in_check && ply >= 2 && stack_[ply - 2].static_eval != VALUE_NONE &&
                      eval > stack_[ply - 2].static_eval;
     stack_[ply + 1].killers[0] = stack_[ply + 1].killers[1] = NO_MOVE;
 
     if (!pv && !in_check && excluded == NO_MOVE) {
-        if (Features.rfp && depth <= 8 && eval - 75 * (depth - improving) >= beta && eval < VALUE_MATE_IN_MAX_PLY)
+        if (Features.rfp && depth <= 8 && eval - 75 * (depth - improving) - unc_margin >= beta && eval < VALUE_MATE_IN_MAX_PLY)
             return eval;
 
-        if (Features.razoring && depth <= 3 && eval + 200 + 150 * depth <= alpha) {
+        if (Features.razoring && depth <= 3 && eval + 200 + 150 * depth + unc_margin <= alpha) {
             Value v = qsearch(pos, alpha, alpha + 1, ply);
             if (v <= alpha) return v;
         }
@@ -494,7 +500,7 @@ Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int p
 
         if (!root && best > -VALUE_MATE_IN_MAX_PLY && pos.has_non_pawn_material(pos.side_to_move())) {
             if (quiet && Features.lmp && depth <= 6 && nq >= (3 + depth * depth) / (improving ? 1 : 2)) continue;
-            if (quiet && Features.futility && !in_check && depth <= 6 && eval + 100 + 90 * depth <= alpha) continue;
+            if (quiet && Features.futility && !in_check && depth <= 6 && eval + 100 + 90 * depth + unc_margin <= alpha) continue;
             if (Features.see_pruning && depth <= 6 &&
                 !see_ge(pos, m, quiet ? -60 * depth : -25 * depth * depth))
                 continue;
@@ -522,6 +528,7 @@ Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int p
                 r -= gives_check;
                 if (Features.cut_node) r += 2 * cut;
                 r -= tt_pv && !pv;
+                if (Features.unc_lmr && unc >= 0) r += (unc < 30) - (unc > 120);
                 if (Features.lmr_terms) {
                     // Trust a deep TT entry, distrust nodes whose TT move is a capture, and reduce less where
                     // the static eval needed a big correction (an uncertain position).

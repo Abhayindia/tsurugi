@@ -11,6 +11,8 @@ namespace tsurugi::nnue {
 //   version 1: "TSRG" | u32 1 | u32 hidden=H | i16 ft_w[768][H] | i16 ft_b[H] | i16 out_w[2H] | i32 out_b
 //   version 2: "TSRG" | u32 2 | u32 hidden=H | u32 buckets=B | i16 ft_w[768][H] | i16 ft_b[H]
 //              | i16 out_w[B][2H] | i32 out_b[B]
+//   version 3: version 2 followed by an uncertainty head i16 aux_w[B][2H] | i32 aux_b[B] | i32 aux_q
+//              (scripts/nnue/fit_uncertainty.py), predicting the evaluation's error in centipawns.
 // Inputs: 768 piece-square features per perspective; hidden = clamp(acc, 0, QA); output scaled by SCALE/(QA*QB).
 // With B output buckets the output layer is chosen by the number of pieces on the board.
 #ifndef TSURUGI_NNUE_HIDDEN
@@ -54,5 +56,8 @@ struct Delta {
 void update(const Accumulator& src, Accumulator& dst, const Delta& d);
 // `pieces` is the number of pieces on the board, kings included.
 Value evaluate(const Accumulator& acc, Color stm, int pieces);
+// The network's predicted error of its own evaluation, in centipawns; -1 when the network has no uncertainty head.
+int uncertainty(const Accumulator& acc, Color stm, int pieces);
+bool has_uncertainty();
 
 }  // namespace tsurugi::nnue

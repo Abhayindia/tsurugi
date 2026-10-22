@@ -36,7 +36,8 @@ const Toggle TOGGLES[] = {
     {"SEEPruning", &Features.see_pruning},   {"CounterMoves", &Features.counter_moves},
     {"StagedTTMove", &Features.staged_tt},   {"ContHistory", &Features.cont_history},
     {"IIR", &Features.iir},   {"Singular", &Features.singular},
-    {"CorrHistory", &Features.corr_history}, {"NonPawnCorr", &Features.nonpawn_corr}, {"LmrTerms", &Features.lmr_terms}, {"LmrHistory", &Features.lmr_history}, {"IIRCut", &Features.iir_cut}, {"CaptHistory", &Features.capt_history},
+    {"CorrHistory", &Features.corr_history}, {"NonPawnCorr", &Features.nonpawn_corr}, {"LmrTerms", &Features.lmr_terms}, {"LmrHistory", &Features.lmr_history}, {"IIRCut", &Features.iir_cut},
+    {"UncPrune", &Features.unc_prune}, {"UncLMR", &Features.unc_lmr}, {"CaptHistory", &Features.capt_history},
     {"NodeTM", &Features.node_tm},   {"CutNode", &Features.cut_node},
     {"ProbCut", &Features.probcut},   {"SingularV2", &Features.singular_v2},
     {"TTPV", &Features.tt_pv},   {"Cuckoo", &Features.cuckoo},
@@ -121,7 +122,11 @@ public:
         } else if (cmd == "d") {
             std::cout << pos_.fen() << std::endl;
         } else if (cmd == "eval") {
-            std::cout << "eval " << evaluate(pos_) << " (side to move)" << std::endl;
+            std::cout << "eval " << evaluate(pos_) << " (side to move)";
+            if (Position::nnue_enabled && nnue::has_uncertainty())
+                std::cout << " uncertainty "
+                          << nnue::uncertainty(pos_.accumulator(), pos_.side_to_move(), popcount(pos_.pieces()));
+            std::cout << std::endl;
         }
         return true;
     }

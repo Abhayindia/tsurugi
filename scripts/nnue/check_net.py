@@ -25,16 +25,21 @@ def load(path):
     raw = open(path, "rb").read()
     assert raw[:4] == b"TSRG"
     version, H = struct.unpack_from("<II", raw, 4)
-    B, o = (struct.unpack_from("<I", raw, 12)[0], 16) if version == 2 else (1, 12)
+    B, o = (struct.unpack_from("<I", raw, 12)[0], 16) if version >= 2 else (1, 12)
     ft_w = np.frombuffer(raw, np.int16, 768 * H, o).reshape(768, H).astype(np.int64); o += 768 * H * 2
     ft_b = np.frombuffer(raw, np.int16, H, o).astype(np.int64); o += H * 2
     out_w = np.frombuffer(raw, np.int16, B * 2 * H, o).reshape(B, 2 * H).astype(np.int64); o += B * 2 * H * 2
-    out_b = struct.unpack_from(f"<{B}i", raw, o)
-    return ft_w, ft_b, out_w, out_b, H
+    out_b = struct.unpack_from(f"<{B}i", raw, o); o += B * 4
+    aux = None
+    if version == 3:
+        aux_w = np.frombuffer(raw, np.int16, B * 2 * H, o).reshape(B, 2 * H).astype(np.int64); o += B * 2 * H * 2
+        aux_b = struct.unpack_from(f"<{B}i", raw, o); o += B * 4
+        aux = (aux_w, aux_b, struct.unpack_from("<i", raw, o)[0])
+    return ft_w, ft_b, out_w, out_b, H, aux
 
 
 def reference(net, board):
-    ft_w, ft_b, out_w, out_b, H = net
+    ft_w, ft_b, out_w, out_b, H, aux = net
     acc = {c: ft_b.copy() for c in (chess.WHITE, chess.BLACK)}
     for sq, p in board.piece_map().items():
         idx = ((0 if p.color else 1) * 6 + p.piece_type - 1)
@@ -45,13 +50,20 @@ def reference(net, board):
     k = min(max((len(board.piece_map()) - 2) * B // 32, 0), B - 1)
     s = int(np.dot(np.clip(us, 0, QA), out_w[k][:H]) + np.dot(np.clip(them, 0, QA), out_w[k][H:]))
     v = (s + out_b[k]) * SCALE
-    return int(v / (QA * QB))  # C++ integer division truncates toward zero
+    unc = None
+    if aux:
+        aux_w, aux_b, q = aux
+        u = int(np.dot(np.clip(us, 0, QA), aux_w[k][:H]) + np.dot(np.clip(them, 0, QA), aux_w[k][H:]))
+        unc = max(0, int((u + aux_b[k]) / q))
+    return int(v / (QA * QB)), unc  # C++ integer division truncates toward zero
 
 
 def engine_eval(engine, net_path, fen):
     cmds = f"setoption name EvalFile value {net_path}\nsetoption name UseNNUE value true\nposition fen {fen}\neval\nquit\n"
     out = subprocess.run([engine], input=cmds, capture_output=True, text=True).stdout
-    return int(next(l for l in out.splitlines() if l.startswith("eval ")).split()[1])
+    words = next(l for l in out.splitlines() if l.startswith("eval ")).split()
+    unc = int(words[words.index("uncertainty") + 1]) if "uncertainty" in words else None
+    return int(words[1]), unc
 
 
 def main():
@@ -61,7 +73,8 @@ def main():
     for fen in FENS:
         ref, eng = reference(net, chess.Board(fen)), engine_eval(engine, net_path, fen)
         bad += ref != eng
-        print(f"{'ok  ' if ref == eng else 'FAIL'} ref {ref:6} engine {eng:6}  {fen}")
+        extra = f"  uncertainty ref {ref[1]} engine {eng[1]}" if ref[1] is not None else ""
+        print(f"{'ok  ' if ref == eng else 'FAIL'} ref {ref[0]:6} engine {eng[0]:6}{extra}  {fen}")
     print("ALL MATCH" if not bad else f"{bad} MISMATCHES")
     sys.exit(1 if bad else 0)
 
