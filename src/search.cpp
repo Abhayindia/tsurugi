@@ -377,9 +377,12 @@ Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int p
     Value eval = corrected(pos, raw_eval, ply);
     // The network's own estimate of how wrong this static eval is (cp); -1 when unused or unavailable.
     int unc = -1;
-    if ((Features.unc_prune || Features.unc_lmr) && !in_check && Position::nnue_enabled && nnue::has_uncertainty())
+    bool use_unc = Features.unc_prune || Features.unc_lmr || Features.unc_prune2 || Features.unc_lmr2;
+    if (use_unc && !in_check && Position::nnue_enabled && nnue::has_uncertainty())
         unc = nnue::uncertainty(pos.accumulator(), pos.side_to_move(), popcount(pos.pieces()));
     int unc_margin = Features.unc_prune && unc > 0 ? unc / 2 : 0;
+    // Centred version: about 80 cp is the network's typical error, so margins tighten below it and widen above it.
+    if (Features.unc_prune2 && unc >= 0) unc_margin = std::clamp(unc - 80, -60, 120) / 4;
     stack_[ply].static_eval = eval;
     bool improving = !in_check && ply >= 2 && stack_[ply - 2].static_eval != VALUE_NONE &&
                      eval > stack_[ply - 2].static_eval;
@@ -529,6 +532,8 @@ Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int p
                 if (Features.cut_node) r += 2 * cut;
                 r -= tt_pv && !pv;
                 if (Features.unc_lmr && unc >= 0) r += (unc < 30) - (unc > 120);
+                // Only the extreme quarters: confident below ~35 cp, unsure above ~160 cp.
+                if (Features.unc_lmr2 && unc >= 0 && !pv) r += (unc < 35) - (unc > 160);
                 if (Features.lmr_terms) {
                     // Trust a deep TT entry, distrust nodes whose TT move is a capture, and reduce less where
                     // the static eval needed a big correction (an uncertain position).
