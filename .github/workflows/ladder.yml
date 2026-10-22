@@ -46,6 +46,12 @@ jobs:
               git clone -q --depth 1 https://github.com/jeffreyan11/uci-chess-engine.git opp
               make -C opp/src -j"$(nproc)" > build.log 2>&1 || { tail -30 build.log; exit 1; }
               cp "$(find opp -maxdepth 2 -type f -name 'laser*' -perm -u+x | head -1)" opponent ;;
+            koivisto)
+              curl -sL -o opponent https://github.com/Luecx/Koivisto/releases/download/v9.0/Koivisto_9.0-linux-avx2-pgo
+              chmod +x opponent ;;
+            halogen)
+              curl -sL -o opponent https://github.com/KierenP/Halogen/releases/download/v16/Halogen-16.0.0-linux-x86_64-avx2
+              chmod +x opponent ;;
             *) echo "unknown opponent"; exit 1 ;;
           esac
           ls -l opponent
