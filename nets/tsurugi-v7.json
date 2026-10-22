@@ -1,0 +1,98 @@
+{
+ "data": "/tmp/sp0,/tmp/sp1,/tmp/sp2,/tmp/sp3,/kaggle/input/notebooks/abhaychaudhary01/tsurugi-lichess-shards/shards:150000000",
+ "positions": 222518256,
+ "hidden": 1536,
+ "epochs": 14,
+ "batch": 16384,
+ "lr": 0.001,
+ "wdl": 0.25,
+ "scale": 400.0,
+ "qa": 255,
+ "qb": 64,
+ "history": [
+  {
+   "epoch": 1,
+   "train_loss": 0.006747202654694543,
+   "val_loss": 0.006171513413873446,
+   "seconds": 1071
+  },
+  {
+   "epoch": 2,
+   "train_loss": 0.005990514604782001,
+   "val_loss": 0.005885138037710395,
+   "seconds": 1068
+  },
+  {
+   "epoch": 3,
+   "train_loss": 0.005789628233074873,
+   "val_loss": 0.005783848711015547,
+   "seconds": 1068
+  },
+  {
+   "epoch": 4,
+   "train_loss": 0.005686088006000247,
+   "val_loss": 0.005709175443317851,
+   "seconds": 1068
+  },
+  {
+   "epoch": 5,
+   "train_loss": 0.00547854669285752,
+   "val_loss": 0.005547832064193618,
+   "seconds": 1066
+  },
+  {
+   "epoch": 6,
+   "train_loss": 0.005441362135935152,
+   "val_loss": 0.005528041389291449,
+   "seconds": 1065
+  },
+  {
+   "epoch": 7,
+   "train_loss": 0.005423037832075273,
+   "val_loss": 0.005523713362088208,
+   "seconds": 1066
+  },
+  {
+   "epoch": 8,
+   "train_loss": 0.00540876839950871,
+   "val_loss": 0.00550577392363373,
+   "seconds": 1065
+  },
+  {
+   "epoch": 9,
+   "train_loss": 0.005342063072657424,
+   "val_loss": 0.005468739093938733,
+   "seconds": 1064
+  },
+  {
+   "epoch": 10,
+   "train_loss": 0.005332793157679259,
+   "val_loss": 0.005466999996261781,
+   "seconds": 1064
+  },
+  {
+   "epoch": 11,
+   "train_loss": 0.005328071072619271,
+   "val_loss": 0.005462754606817137,
+   "seconds": 1063
+  },
+  {
+   "epoch": 12,
+   "train_loss": 0.005324025372649206,
+   "val_loss": 0.0054608706354081415,
+   "seconds": 1064
+  },
+  {
+   "epoch": 13,
+   "train_loss": 0.005300730211586096,
+   "val_loss": 0.00545154868022484,
+   "seconds": 1063
+  },
+  {
+   "epoch": 14,
+   "train_loss": 0.005298357131694333,
+   "val_loss": 0.005451277374317322,
+   "seconds": 1063
+  }
+ ]
+}

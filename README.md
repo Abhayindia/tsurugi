@@ -47,6 +47,7 @@ the previous version; the full record is in [docs/elo_history.md](docs/elo_histo
 | Network v4 over v3 (8+0.08) | +47.9 ± 8.2 |
 | Network v5 over v4 (8+0.08) | +10.4 ± 5.5 |
 | Network v6 over v5 (8+0.08) | +12.1 ± 7.5 |
+| Network v7 over v6 (8+0.08) | +27.2 ± 7.5 |
 | Late move reductions | +144.8 ± 27.7 |
 | Null-move pruning | +137.6 ± 28.1 |
 | Aspiration windows | +78.3 ± 21.7 |
