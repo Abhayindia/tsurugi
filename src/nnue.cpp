@@ -16,8 +16,9 @@ namespace {
 struct Network {
     alignas(64) std::int16_t ft_w[768][HIDDEN];
     alignas(64) std::int16_t ft_b[HIDDEN];
-    alignas(64) std::int16_t out_w[2 * HIDDEN];
-    std::int32_t out_b;
+    alignas(64) std::int16_t out_w[MAX_BUCKETS][2 * HIDDEN];
+    std::int32_t out_b[MAX_BUCKETS];
+    int buckets;
 };
 
 Network net;
@@ -34,12 +35,16 @@ bool load(const std::string& path) {
     in.read(magic, 4);
     in.read(reinterpret_cast<char*>(&version), 4);
     in.read(reinterpret_cast<char*>(&hidden), 4);
-    if (!in || std::memcmp(magic, "TSRG", 4) != 0 || version != 1 || hidden != HIDDEN) return false;
+    if (!in || std::memcmp(magic, "TSRG", 4) != 0 || (version != 1 && version != 2) || hidden != HIDDEN) return false;
+    std::uint32_t buckets = 1;
+    if (version == 2) in.read(reinterpret_cast<char*>(&buckets), 4);
+    if (!in || buckets < 1 || buckets > MAX_BUCKETS) return false;
     auto tmp = std::make_unique<Network>();
+    tmp->buckets = int(buckets);
     in.read(reinterpret_cast<char*>(tmp->ft_w), sizeof(tmp->ft_w));
     in.read(reinterpret_cast<char*>(tmp->ft_b), sizeof(tmp->ft_b));
-    in.read(reinterpret_cast<char*>(tmp->out_w), sizeof(tmp->out_w));
-    in.read(reinterpret_cast<char*>(&tmp->out_b), sizeof(tmp->out_b));
+    for (std::uint32_t b = 0; b < buckets; ++b) in.read(reinterpret_cast<char*>(tmp->out_w[b]), sizeof(tmp->out_w[b]));
+    in.read(reinterpret_cast<char*>(tmp->out_b), std::streamsize(sizeof(std::int32_t) * buckets));
     if (!in || in.peek() != std::char_traits<char>::eof()) return false;
     net = *tmp;
     is_loaded = true;
@@ -97,9 +102,12 @@ void update(const Accumulator& src, Accumulator& dst, const Delta& d) {
     }
 }
 
-Value evaluate(const Accumulator& acc, Color stm) {
+Value evaluate(const Accumulator& acc, Color stm, int pieces) {
     const std::int16_t* us = acc.v[stm];
     const std::int16_t* them = acc.v[~stm];
+    // Buckets split the 2..32 piece range evenly: with 8 buckets, (pieces - 2) / 4.
+    int bucket = net.buckets == 1 ? 0 : std::clamp((pieces - 2) * net.buckets / 32, 0, net.buckets - 1);
+    const std::int16_t* out_w = net.out_w[bucket];
     std::int32_t sum = 0;
 #if defined(__AVX2__)
     // Clipped ReLU on 16 neurons at a time, then multiply-add pairs into 8 int32 lanes (same integer result).
@@ -110,8 +118,8 @@ Value evaluate(const Accumulator& acc, Color stm) {
         __m256i t = _mm256_load_si256(reinterpret_cast<const __m256i*>(them + i));
         u = _mm256_min_epi16(_mm256_max_epi16(u, zero), qa);
         t = _mm256_min_epi16(_mm256_max_epi16(t, zero), qa);
-        acc32 = _mm256_add_epi32(acc32, _mm256_madd_epi16(u, _mm256_load_si256(reinterpret_cast<const __m256i*>(net.out_w + i))));
-        acc32 = _mm256_add_epi32(acc32, _mm256_madd_epi16(t, _mm256_load_si256(reinterpret_cast<const __m256i*>(net.out_w + HIDDEN + i))));
+        acc32 = _mm256_add_epi32(acc32, _mm256_madd_epi16(u, _mm256_load_si256(reinterpret_cast<const __m256i*>(out_w + i))));
+        acc32 = _mm256_add_epi32(acc32, _mm256_madd_epi16(t, _mm256_load_si256(reinterpret_cast<const __m256i*>(out_w + HIDDEN + i))));
     }
     __m128i s128 = _mm_add_epi32(_mm256_castsi256_si128(acc32), _mm256_extracti128_si256(acc32, 1));
     s128 = _mm_add_epi32(s128, _mm_shuffle_epi32(s128, 0x4E));
@@ -119,11 +127,11 @@ Value evaluate(const Accumulator& acc, Color stm) {
     sum = _mm_cvtsi128_si32(s128);
 #else
     for (int i = 0; i < HIDDEN; ++i) {
-        sum += std::clamp<std::int32_t>(us[i], 0, QA) * net.out_w[i];
-        sum += std::clamp<std::int32_t>(them[i], 0, QA) * net.out_w[HIDDEN + i];
+        sum += std::clamp<std::int32_t>(us[i], 0, QA) * out_w[i];
+        sum += std::clamp<std::int32_t>(them[i], 0, QA) * out_w[HIDDEN + i];
     }
 #endif
-    std::int64_t v = (std::int64_t(sum) + net.out_b) * SCALE / (QA * QB);
+    std::int64_t v = (std::int64_t(sum) + net.out_b[bucket]) * SCALE / (QA * QB);
     return Value(std::clamp<std::int64_t>(v, -VALUE_MATE_IN_MAX_PLY + 1, VALUE_MATE_IN_MAX_PLY - 1));
 }
 

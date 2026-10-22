@@ -34,11 +34,12 @@ def views(f):
 
 
 class Net(nn.Module):
-    def __init__(self, hidden):
+    def __init__(self, hidden, buckets=1):
         super().__init__()
+        self.buckets = buckets
         self.ft = nn.EmbeddingBag(PAD + 1, hidden, mode="sum", padding_idx=PAD)
         self.ft_bias = nn.Parameter(torch.zeros(hidden))
-        self.out = nn.Linear(2 * hidden, 1)
+        self.out = nn.Linear(2 * hidden, buckets)
         nn.init.normal_(self.ft.weight, std=0.01)
 
     def forward(self, white, black, stm):
@@ -46,7 +47,13 @@ class Net(nn.Module):
         b = self.ft(black) + self.ft_bias
         s = stm.unsqueeze(1).bool()
         us, them = torch.where(s, b, w), torch.where(s, w, b)
-        return self.out(torch.clamp(torch.cat([us, them], 1), 0, 1)).squeeze(1)
+        out = self.out(torch.clamp(torch.cat([us, them], 1), 0, 1))
+        if self.buckets == 1:
+            return out.squeeze(1)
+        # Same bucket as the engine: the piece count (kings included) split evenly over 2..32.
+        pieces = (white != PAD).sum(1)
+        bucket = torch.clamp((pieces - 2) * self.buckets // 32, 0, self.buckets - 1)
+        return out.gather(1, bucket.unsqueeze(1)).squeeze(1)
 
 
 def load(data, limit):
@@ -94,15 +101,18 @@ def load(data, limit):
 def export(net, path, hidden):
     ft_w = np.round(net.ft.weight.detach().cpu().numpy()[:PAD] * QA).astype(np.int16)  # [768, H]
     ft_b = np.round(net.ft_bias.detach().cpu().numpy() * QA).astype(np.int16)           # [H]
-    out_w = np.round(net.out.weight.detach().cpu().numpy()[0] * QB).astype(np.int16)    # [2H]
-    out_b = int(round(float(net.out.bias.detach().cpu()[0]) * QA * QB))
+    out_w = np.round(net.out.weight.detach().cpu().numpy() * QB).astype(np.int16)       # [B, 2H]
+    out_b = [int(round(float(x) * QA * QB)) for x in net.out.bias.detach().cpu()]       # [B]
     with open(path, "wb") as fh:
         fh.write(b"TSRG")
-        fh.write(struct.pack("<II", 1, hidden))
+        if net.buckets == 1:
+            fh.write(struct.pack("<II", 1, hidden))
+        else:
+            fh.write(struct.pack("<III", 2, hidden, net.buckets))
         fh.write(ft_w.tobytes())
         fh.write(ft_b.tobytes())
         fh.write(out_w.tobytes())
-        fh.write(struct.pack("<i", out_b))
+        fh.write(struct.pack(f"<{len(out_b)}i", *out_b))
 
 
 def main():
@@ -111,6 +121,7 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--epochs", type=int, default=20)
     ap.add_argument("--hidden", type=int, default=256)
+    ap.add_argument("--buckets", type=int, default=1, help="output buckets by piece count (1 or 8)")
     ap.add_argument("--batch", type=int, default=16384)
     ap.add_argument("--lr", type=float, default=1e-3)
     ap.add_argument("--limit", type=int, default=0)
@@ -131,7 +142,7 @@ def main():
     val_idx, train_idx = perm[:n_val], perm[n_val:]
     print(f"{len(train_idx)} training / {n_val} validation positions", flush=True)
 
-    net = Net(a.hidden).to(dev)
+    net = Net(a.hidden, a.buckets).to(dev)
     opt = torch.optim.Adam(net.parameters(), lr=a.lr)
     sched = torch.optim.lr_scheduler.StepLR(opt, step_size=max(1, a.epochs // 3), gamma=0.3)
 
@@ -176,7 +187,7 @@ def main():
         export(net, a.out, a.hidden)
 
     Path(a.out).with_suffix(".json").write_text(json.dumps(
-        {"data": a.data, "positions": len(c), "hidden": a.hidden, "epochs": a.epochs, "batch": a.batch, "lr": a.lr, "wdl": a.wdl,
+        {"data": a.data, "positions": len(c), "hidden": a.hidden, "buckets": a.buckets, "epochs": a.epochs, "batch": a.batch, "lr": a.lr, "wdl": a.wdl,
          "scale": SCALE, "qa": QA, "qb": QB, "history": history}, indent=1))
 
 

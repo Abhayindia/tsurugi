@@ -24,12 +24,12 @@ FENS = [
 def load(path):
     raw = open(path, "rb").read()
     assert raw[:4] == b"TSRG"
-    H = struct.unpack_from("<I", raw, 8)[0]
-    o = 12
+    version, H = struct.unpack_from("<II", raw, 4)
+    B, o = (struct.unpack_from("<I", raw, 12)[0], 16) if version == 2 else (1, 12)
     ft_w = np.frombuffer(raw, np.int16, 768 * H, o).reshape(768, H).astype(np.int64); o += 768 * H * 2
     ft_b = np.frombuffer(raw, np.int16, H, o).astype(np.int64); o += H * 2
-    out_w = np.frombuffer(raw, np.int16, 2 * H, o).astype(np.int64); o += 2 * H * 2
-    out_b = struct.unpack_from("<i", raw, o)[0]
+    out_w = np.frombuffer(raw, np.int16, B * 2 * H, o).reshape(B, 2 * H).astype(np.int64); o += B * 2 * H * 2
+    out_b = struct.unpack_from(f"<{B}i", raw, o)
     return ft_w, ft_b, out_w, out_b, H
 
 
@@ -41,8 +41,10 @@ def reference(net, board):
         acc[chess.WHITE] += ft_w[idx * 64 + sq]
         acc[chess.BLACK] += ft_w[((idx + 6) % 12) * 64 + (sq ^ 56)]
     us, them = acc[board.turn], acc[not board.turn]
-    s = int(np.dot(np.clip(us, 0, QA), out_w[:H]) + np.dot(np.clip(them, 0, QA), out_w[H:]))
-    v = (s + out_b) * SCALE
+    B = len(out_b)
+    k = min(max((len(board.piece_map()) - 2) * B // 32, 0), B - 1)
+    s = int(np.dot(np.clip(us, 0, QA), out_w[k][:H]) + np.dot(np.clip(them, 0, QA), out_w[k][H:]))
+    v = (s + out_b[k]) * SCALE
     return int(v / (QA * QB))  # C++ integer division truncates toward zero
 
 

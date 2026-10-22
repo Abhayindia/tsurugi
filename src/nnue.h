@@ -8,8 +8,11 @@
 namespace tsurugi::nnue {
 
 // Network file (little-endian), written by scripts/nnue/train.py:
-//   "TSRG" | u32 version=1 | u32 hidden=H | i16 ft_w[768][H] | i16 ft_b[H] | i16 out_w[2H] | i32 out_b
+//   version 1: "TSRG" | u32 1 | u32 hidden=H | i16 ft_w[768][H] | i16 ft_b[H] | i16 out_w[2H] | i32 out_b
+//   version 2: "TSRG" | u32 2 | u32 hidden=H | u32 buckets=B | i16 ft_w[768][H] | i16 ft_b[H]
+//              | i16 out_w[B][2H] | i32 out_b[B]
 // Inputs: 768 piece-square features per perspective; hidden = clamp(acc, 0, QA); output scaled by SCALE/(QA*QB).
+// With B output buckets the output layer is chosen by the number of pieces on the board.
 #ifndef TSURUGI_NNUE_HIDDEN
 #define TSURUGI_NNUE_HIDDEN 1536
 #endif
@@ -19,6 +22,7 @@ constexpr int HIDDEN = TSURUGI_NNUE_HIDDEN;
 constexpr int QA = 255;
 constexpr int QB = 64;
 constexpr int SCALE = 400;
+constexpr int MAX_BUCKETS = 8;
 
 struct alignas(64) Accumulator {
     std::int16_t v[COLOR_NB][HIDDEN];  // [perspective][neuron]
@@ -48,6 +52,7 @@ struct Delta {
 };
 // dst = src + the delta, in one pass over the accumulator.
 void update(const Accumulator& src, Accumulator& dst, const Delta& d);
-Value evaluate(const Accumulator& acc, Color stm);
+// `pieces` is the number of pieces on the board, kings included.
+Value evaluate(const Accumulator& acc, Color stm, int pieces);
 
 }  // namespace tsurugi::nnue

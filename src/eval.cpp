@@ -207,7 +207,7 @@ Score eval_side(const Position& pos, Color c) {
 EvalFeatures EvalTerms;
 
 Value evaluate(const Position& pos) {
-    if (Position::nnue_enabled) return nnue::evaluate(pos.accumulator(), pos.side_to_move());
+    if (Position::nnue_enabled) return nnue::evaluate(pos.accumulator(), pos.side_to_move(), popcount(pos.pieces()));
     Score total;
     if (EvalTerms.mobility || EvalTerms.king_safety || EvalTerms.pawn_structure || EvalTerms.passed_pawns ||
         EvalTerms.passed_pawns2 || EvalTerms.rook_files) {
