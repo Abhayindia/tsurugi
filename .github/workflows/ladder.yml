@@ -8,7 +8,7 @@ on:
     inputs:
       run_tag: {description: "unique name of this run", required: true}
       ref: {description: "commit of the engine", required: true}
-      opponents: {description: "JSON array of opponents (weiss, laser)", default: "[\"weiss\",\"laser\"]"}
+      opponents: {description: "JSON array of opponents (weiss, laser, koivisto, halogen)", default: "[\"weiss\",\"laser\",\"koivisto\",\"halogen\"]"}
       shards: {description: "JSON array of shard numbers per opponent", default: "[1,2]"}
       pairs: {description: "game pairs per shard", default: "100"}
       tc: {description: "time control", default: "10+0.1"}
