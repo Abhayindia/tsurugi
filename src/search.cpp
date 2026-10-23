@@ -111,6 +111,12 @@ void Searcher::new_game() {
     std::memset(np_corr_, 0, sizeof(np_corr_));
     std::fill(cont_corr_.begin(), cont_corr_.end(), 0);
     std::memset(capt_, 0, sizeof(capt_));
+    std::fill(pawn_hist_.begin(), pawn_hist_.end(), 0);
+}
+
+static int pawn_slot(const Position& pos) {
+    U64 h = (pos.pieces(WHITE, PAWN) * 0x9E3779B97F4A7C15ULL) ^ (pos.pieces(BLACK, PAWN) * 0xC2B2AE3D27D4EB4FULL);
+    return int(h >> 55);
 }
 
 int& Searcher::capt_entry(const Position& pos, Move m) {
@@ -156,6 +162,7 @@ int* Searcher::cont_entry(int ply, Piece p, int to) {
 
 int Searcher::quiet_score(Color us, Move m, Piece p, int ply) {
     int s = history_[us][from_sq(m)][to_sq(m)];
+    if (Features.pawn_history) s += pawn_hist_[(stack_[ply].pawn_idx * PIECE_NB + p) * SQUARE_NB + to_sq(m)];
     if (!Features.cont_history) return s;
     for (int back = 1; back <= 2; ++back)
         if (int* e = cont_entry(ply - back, p, to_sq(m))) s += *e;
@@ -193,6 +200,7 @@ bool Searcher::out_of_time() {
 void Searcher::score_moves(const Position& pos, const Move* moves, int n, int* scores, Move tt_move, int ply) {
     Color us = pos.side_to_move();
     const Frame& f = stack_[ply];
+    if (Features.pawn_history) stack_[ply].pawn_idx = pawn_slot(pos);
     Move counter = NO_MOVE;
     if (Features.counter_moves && ply > 0 && stack_[ply - 1].current != NO_MOVE)
         counter = counter_[stack_[ply - 1].moved][to_sq(stack_[ply - 1].current)];
@@ -236,6 +244,13 @@ void Searcher::update_quiet_stats(const Position& pos, Move best, const Move* qu
     history_update(history_[us][from_sq(best)][to_sq(best)], bonus);
     for (int i = 0; i < nq; ++i)
         if (quiets[i] != best) history_update(history_[us][from_sq(quiets[i])][to_sq(quiets[i])], -bonus);
+    if (Features.pawn_history) {
+        int* ph = &pawn_hist_[pawn_slot(pos) * PIECE_NB * SQUARE_NB];
+        history_update(ph[int(pos.piece_on(from_sq(best))) * SQUARE_NB + to_sq(best)], bonus);
+        for (int i = 0; i < nq; ++i)
+            if (quiets[i] != best)
+                history_update(ph[int(pos.piece_on(from_sq(quiets[i]))) * SQUARE_NB + to_sq(quiets[i])], -bonus);
+    }
     if (Features.cont_history) {
         for (int back = 1; back <= 2; ++back) {
             if (int* e = cont_entry(ply - back, pos.piece_on(from_sq(best)), to_sq(best))) history_update(*e, bonus);

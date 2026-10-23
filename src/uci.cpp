@@ -42,7 +42,7 @@ const Toggle TOGGLES[] = {
     {"NodeTM", &Features.node_tm},   {"CutNode", &Features.cut_node},
     {"ProbCut", &Features.probcut},   {"SingularV2", &Features.singular_v2},
     {"TTPV", &Features.tt_pv},   {"Cuckoo", &Features.cuckoo},
-    {"ContCorr", &Features.cont_corr},
+    {"ContCorr", &Features.cont_corr},   {"PawnHistory", &Features.pawn_history},
     {"EvalMobility", &EvalTerms.mobility},   {"EvalPawnStructure", &EvalTerms.pawn_structure},
     {"EvalPassedPawns", &EvalTerms.passed_pawns}, {"EvalPassedPawns2", &EvalTerms.passed_pawns2},
     {"EvalKingSafety", &EvalTerms.king_safety},

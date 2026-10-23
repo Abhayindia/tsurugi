@@ -51,6 +51,7 @@ struct SearchFeatures {
     bool lmr_history = false;
     bool cuckoo = false;
     bool cont_corr = false;
+    bool pawn_history = false;
 };
 
 extern SearchFeatures Features;
@@ -80,6 +81,7 @@ private:
         Value static_eval;
         Move excluded;
         int double_ext;  // double extensions already made on the path to this node
+        int pawn_idx;    // pawn-history slot of this node's pawn structure
     };
 
     Value negamax(Position& pos, Value alpha, Value beta, int depth, int ply, bool cut);
@@ -123,6 +125,9 @@ private:
     // The same, keyed by the last two moves: [side to move][piece, to two plies up][piece, to one ply up].
     std::vector<int> cont_corr_ = std::vector<int>(int(COLOR_NB) * PIECE_NB * SQUARE_NB * PIECE_NB * SQUARE_NB);
     std::vector<int> cont_ = std::vector<int>(int(PIECE_NB) * SQUARE_NB * PIECE_NB * SQUARE_NB);
+    // Pawn history: [pawn-structure slot][piece][to], for quiet moves.
+    static constexpr int PAWN_HIST_SIZE = 512;
+    std::vector<int> pawn_hist_ = std::vector<int>(PAWN_HIST_SIZE * PIECE_NB * SQUARE_NB);
     Frame stack_[MAX_PLY + 4] = {};
     Move pv_[MAX_PLY + 1][MAX_PLY + 1] = {};
     int pv_len_[MAX_PLY + 1] = {};
