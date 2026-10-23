@@ -52,6 +52,7 @@ struct SearchFeatures {
     bool cuckoo = false;
     bool cont_corr = false;
     bool pawn_history = false;
+    bool threat_history = false;
 };
 
 extern SearchFeatures Features;
@@ -82,6 +83,7 @@ private:
         Move excluded;
         int double_ext;  // double extensions already made on the path to this node
         int pawn_idx;    // pawn-history slot of this node's pawn structure
+        U64 threats;     // squares the opponent attacks at this node
     };
 
     Value negamax(Position& pos, Value alpha, Value beta, int depth, int ply, bool cut);
@@ -128,6 +130,8 @@ private:
     // Pawn history: [pawn-structure slot][piece][to], for quiet moves.
     static constexpr int PAWN_HIST_SIZE = 512;
     std::vector<int> pawn_hist_ = std::vector<int>(PAWN_HIST_SIZE * PIECE_NB * SQUARE_NB);
+    // Threat history: [side][from attacked][to attacked][from][to], replaces the main history for quiet moves.
+    std::vector<int> threat_hist_ = std::vector<int>(int(COLOR_NB) * 4 * SQUARE_NB * SQUARE_NB);
     Frame stack_[MAX_PLY + 4] = {};
     Move pv_[MAX_PLY + 1][MAX_PLY + 1] = {};
     int pv_len_[MAX_PLY + 1] = {};

@@ -112,6 +112,23 @@ void Searcher::new_game() {
     std::fill(cont_corr_.begin(), cont_corr_.end(), 0);
     std::memset(capt_, 0, sizeof(capt_));
     std::fill(pawn_hist_.begin(), pawn_hist_.end(), 0);
+    std::fill(threat_hist_.begin(), threat_hist_.end(), 0);
+}
+
+// Every square the side not to move attacks.
+static U64 threatened(const Position& pos) {
+    Color them = ~pos.side_to_move();
+    U64 occ = pos.pieces(), t = 0;
+    for (U64 b = pos.pieces(them, PAWN); b;) t |= attacks::pawn[them][pop_lsb(b)];
+    for (int pt = KNIGHT; pt <= KING; ++pt)
+        for (U64 b = pos.pieces(them, PieceType(pt)); b;) t |= attacks::piece(PieceType(pt), pop_lsb(b), occ);
+    return t;
+}
+
+static int threat_idx(Color us, U64 threats, Move m) {
+    int from = from_sq(m), to = to_sq(m);
+    int k = int(us) * 4 + int((threats >> from) & 1) * 2 + int((threats >> to) & 1);
+    return (k * SQUARE_NB + from) * SQUARE_NB + to;
 }
 
 static int pawn_slot(const Position& pos) {
@@ -161,7 +178,8 @@ int* Searcher::cont_entry(int ply, Piece p, int to) {
 }
 
 int Searcher::quiet_score(Color us, Move m, Piece p, int ply) {
-    int s = history_[us][from_sq(m)][to_sq(m)];
+    int s = Features.threat_history ? threat_hist_[threat_idx(us, stack_[ply].threats, m)]
+                                    : history_[us][from_sq(m)][to_sq(m)];
     if (Features.pawn_history) s += pawn_hist_[(stack_[ply].pawn_idx * PIECE_NB + p) * SQUARE_NB + to_sq(m)];
     if (!Features.cont_history) return s;
     for (int back = 1; back <= 2; ++back)
@@ -201,6 +219,7 @@ void Searcher::score_moves(const Position& pos, const Move* moves, int n, int* s
     Color us = pos.side_to_move();
     const Frame& f = stack_[ply];
     if (Features.pawn_history) stack_[ply].pawn_idx = pawn_slot(pos);
+    if (Features.threat_history) stack_[ply].threats = threatened(pos);
     Move counter = NO_MOVE;
     if (Features.counter_moves && ply > 0 && stack_[ply - 1].current != NO_MOVE)
         counter = counter_[stack_[ply - 1].moved][to_sq(stack_[ply - 1].current)];
@@ -244,6 +263,12 @@ void Searcher::update_quiet_stats(const Position& pos, Move best, const Move* qu
     history_update(history_[us][from_sq(best)][to_sq(best)], bonus);
     for (int i = 0; i < nq; ++i)
         if (quiets[i] != best) history_update(history_[us][from_sq(quiets[i])][to_sq(quiets[i])], -bonus);
+    if (Features.threat_history) {
+        U64 t = threatened(pos);
+        history_update(threat_hist_[threat_idx(us, t, best)], bonus);
+        for (int i = 0; i < nq; ++i)
+            if (quiets[i] != best) history_update(threat_hist_[threat_idx(us, t, quiets[i])], -bonus);
+    }
     if (Features.pawn_history) {
         int* ph = &pawn_hist_[pawn_slot(pos) * PIECE_NB * SQUARE_NB];
         history_update(ph[int(pos.piece_on(from_sq(best))) * SQUARE_NB + to_sq(best)], bonus);
