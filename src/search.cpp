@@ -424,6 +424,18 @@ Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int p
     // Centred version: about 80 cp is the network's typical error, so margins tighten below it and widen above it.
     if (Features.unc_prune2 && unc >= 0) unc_margin = std::clamp(unc - 80, -60, 120) / 4;
     stack_[ply].static_eval = eval;
+    // A quiet move that left the opponent with a worse static eval than ours before it was probably good.
+    if (Features.eval_drop_hist && !in_check) {
+        Move pm = ply > 0 && excluded == NO_MOVE ? stack_[ply - 1].current : NO_MOVE;
+        const Frame& prev = stack_[ply > 0 ? ply - 1 : 0];
+        if (pm != NO_MOVE && prev.static_eval != VALUE_NONE && !is_capture(pm) && !is_promotion(pm)) {
+            int bonus = std::clamp(-10 * (prev.static_eval + eval), -1600, 1500) + 600;
+            Color them = ~pos.side_to_move();
+            if (Features.threat_history) history_update(threat_hist_[threat_idx(them, prev.threats, pm)], bonus);
+            else history_update(history_[them][from_sq(pm)][to_sq(pm)], bonus);
+        }
+        if (Features.threat_history) stack_[ply].threats = threatened(pos);
+    }
     bool improving = !in_check && ply >= 2 && stack_[ply - 2].static_eval != VALUE_NONE &&
                      eval > stack_[ply - 2].static_eval;
     stack_[ply + 1].killers[0] = stack_[ply + 1].killers[1] = NO_MOVE;

@@ -53,6 +53,7 @@ struct SearchFeatures {
     bool cont_corr = false;
     bool pawn_history = false;
     bool threat_history = true;
+    bool eval_drop_hist = false;
 };
 
 extern SearchFeatures Features;
