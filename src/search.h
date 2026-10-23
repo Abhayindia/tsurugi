@@ -52,7 +52,7 @@ struct SearchFeatures {
     bool cuckoo = false;
     bool cont_corr = false;
     bool pawn_history = false;
-    bool threat_history = false;
+    bool threat_history = true;
 };
 
 extern SearchFeatures Features;
