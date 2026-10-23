@@ -44,6 +44,7 @@ const Toggle TOGGLES[] = {
     {"TTPV", &Features.tt_pv},   {"Cuckoo", &Features.cuckoo},
     {"ContCorr", &Features.cont_corr},   {"PawnHistory", &Features.pawn_history},
     {"ThreatHistory", &Features.threat_history}, {"EvalDropHist", &Features.eval_drop_hist},
+    {"CaptHistSEE", &Features.capt_hist_see},
     {"EvalMobility", &EvalTerms.mobility},   {"EvalPawnStructure", &EvalTerms.pawn_structure},
     {"EvalPassedPawns", &EvalTerms.passed_pawns}, {"EvalPassedPawns2", &EvalTerms.passed_pawns2},
     {"EvalKingSafety", &EvalTerms.king_safety},

@@ -234,8 +234,10 @@ void Searcher::score_moves(const Position& pos, const Move* moves, int n, int* s
             int vv = move_flag(m) == EP_CAPTURE ? PIECE_VALUE[PAWN] : victim == NO_PIECE ? 0 : PIECE_VALUE[type_of(victim)];
             if (is_promotion(m)) vv += PIECE_VALUE[promo_type(m)];
             int s = vv * 16 - type_of(pos.piece_on(from));
-            if (Features.capt_history && is_capture(m)) s += capt_entry(pos, m) / 8;
-            bool good = !Features.see_pruning || see_ge(pos, m, 0);
+            int ch = (Features.capt_history || Features.capt_hist_see) && is_capture(m) ? capt_entry(pos, m) : 0;
+            s += Features.capt_hist_see ? ch / 4 : ch / 8;
+            // Captures that usually work out may lose a little material by SEE and still count as good.
+            bool good = !Features.see_pruning || see_ge(pos, m, Features.capt_hist_see ? -ch / 48 : 0);
             scores[i] = (good ? 20'000'000 : -20'000'000) + s;
         } else if (is_promotion(m)) {
             scores[i] = -25'000'000 + promo_type(m);
@@ -636,7 +638,7 @@ Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int p
                 pv_len_[ply] = std::max(pv_len_[ply + 1], ply + 1);
                 if (v >= beta) {
                     if (quiet) update_quiet_stats(pos, m, quiets, nq, depth, ply);
-                    if (Features.capt_history) update_capture_stats(pos, is_capture(m) ? m : NO_MOVE, captures, nc, depth);
+                    if (Features.capt_history || Features.capt_hist_see) update_capture_stats(pos, is_capture(m) ? m : NO_MOVE, captures, nc, depth);
                     break;
                 }
             }
