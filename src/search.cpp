@@ -429,7 +429,7 @@ Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int p
         Move pm = ply > 0 && excluded == NO_MOVE ? stack_[ply - 1].current : NO_MOVE;
         const Frame& prev = stack_[ply > 0 ? ply - 1 : 0];
         if (pm != NO_MOVE && prev.static_eval != VALUE_NONE && !is_capture(pm) && !is_promotion(pm)) {
-            int bonus = std::clamp(-10 * (prev.static_eval + eval), -1600, 1500) + 600;
+            int bonus = std::clamp(-2 * (prev.static_eval + eval), -320, 300) + 120;
             Color them = ~pos.side_to_move();
             if (Features.threat_history) history_update(threat_hist_[threat_idx(them, prev.threats, pm)], bonus);
             else history_update(history_[them][from_sq(pm)][to_sq(pm)], bonus);
