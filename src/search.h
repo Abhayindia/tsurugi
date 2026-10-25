@@ -56,6 +56,7 @@ struct SearchFeatures {
     bool eval_drop_hist = false;
     bool capt_hist_see = true;
     bool hist_prune = false;
+    bool qs_futility = false;
 };
 
 extern SearchFeatures Features;

@@ -345,6 +345,14 @@ Value Searcher::qsearch(Position& pos, Value alpha, Value beta, int ply) {
         Move m = list.moves[i];
         if (!pos.legal(m)) continue;
         ++legal;
+        // Skip captures that cannot lift a static eval plus margin above alpha.
+        if (!in_check && Features.qs_futility && !is_promotion(m)) {
+            Value fbase = stand + 200;
+            Piece cap = move_flag(m) == EP_CAPTURE ? make_piece(~pos.side_to_move(), PAWN) : pos.piece_on(to_sq(m));
+            Value fv = fbase + SEE_VALUE[type_of(cap)];
+            if (fv <= alpha) { best = std::max(best, fv); continue; }
+            if (fbase <= alpha && !see_ge(pos, m, 1)) { best = std::max(best, fbase); continue; }
+        }
         if (!in_check && Features.see_pruning && !see_ge(pos, m, 0)) continue;
 
         stack_[ply].current = m;
