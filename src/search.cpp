@@ -558,6 +558,10 @@ Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int p
         if (!root && best > -VALUE_MATE_IN_MAX_PLY && pos.has_non_pawn_material(pos.side_to_move())) {
             if (quiet && Features.lmp && depth <= 6 && nq >= (3 + depth * depth) / (improving ? 1 : 2)) continue;
             if (quiet && Features.futility && !in_check && depth <= 6 && eval + 100 + 90 * depth + unc_margin <= alpha) continue;
+            // Quiet moves that have kept failing in similar positions are not worth a shallow search.
+            if (quiet && Features.hist_prune && depth <= 4 && legal > 0 &&
+                quiet_score(pos.side_to_move(), m, pos.piece_on(from_sq(m)), ply) < -2500 * depth)
+                continue;
             if (Features.see_pruning && depth <= 6 &&
                 !see_ge(pos, m, quiet ? -60 * depth : -25 * depth * depth))
                 continue;

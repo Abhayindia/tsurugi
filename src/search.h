@@ -55,6 +55,7 @@ struct SearchFeatures {
     bool threat_history = true;
     bool eval_drop_hist = false;
     bool capt_hist_see = true;
+    bool hist_prune = false;
 };
 
 extern SearchFeatures Features;
