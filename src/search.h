@@ -54,7 +54,7 @@ struct SearchFeatures {
     bool pawn_history = false;
     bool threat_history = true;
     bool eval_drop_hist = false;
-    bool capt_hist_see = false;
+    bool capt_hist_see = true;
 };
 
 extern SearchFeatures Features;

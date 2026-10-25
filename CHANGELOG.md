@@ -49,6 +49,7 @@ All strength figures are SPRT results against the previous version (fastchess, U
 - Correction history keyed by each side's non-pawn pieces +18.4 ± 6.9 (3200 games, 8+0.08).
 - TT flag for nodes that were once on the principal variation, reduced less +4.1 ± 3.1 (16000 games, 8+0.08).
 - Quiet-move history indexed also by whether the from- and to-squares are attacked +10.2 ± 5.0 (6400 games, 8+0.08).
+- Captures ordered by capture history, with the good/bad capture SEE threshold scaled by that history +6.2 ± 3.5 (12800 games, 8+0.08).
 
 ### Engine
 - AVX2 kernel for the network output and single-pass accumulator updates: the same search in roughly half the
