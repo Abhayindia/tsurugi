@@ -116,9 +116,10 @@ public:
             int games = 0;
             std::uint64_t nodes = 5000, seed = 1;
             std::string path;
-            is >> games >> nodes >> seed >> path;
+            std::string mode;
+            is >> games >> nodes >> seed >> path >> mode;
             if (games <= 0 || path.empty()) std::cout << "info string usage: datagen <games> <nodes> <seed> <outfile>" << std::endl;
-            else datagen(games, nodes, seed, path);
+            else datagen(games, nodes, seed, path, mode == "guided");
         } else if (cmd == "perft") {
             stop();
             int depth = 1;

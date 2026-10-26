@@ -10,6 +10,7 @@ on:
       ref: {description: "commit of the engine", default: "main"}
       games: {description: "games per process", default: "10000"}
       nodes: {description: "nodes per move", default: "5000"}
+      mode: {description: "empty, or guided (node budget scaled by network uncertainty, same average)", default: ""}
       hours: {description: "stop each process after this many hours", default: "5"}
       shards: {description: "JSON array of shard numbers", default: "[1,2,3,4,5,6,7,8]"}
       seed_offset: {description: "added to every seed so runs never repeat games", default: "0"}
@@ -37,7 +38,7 @@ jobs:
           n=$(nproc)
           for i in $(seq 0 $((n - 1))); do
             seed=$(( ${{ inputs.seed_offset }} + ${{ matrix.shard }} * 64 + i ))
-            timeout "${{ inputs.hours }}h" ./build/tsurugi datagen ${{ inputs.games }} ${{ inputs.nodes }} $seed data_$i.txt \
+            timeout "${{ inputs.hours }}h" ./build/tsurugi datagen ${{ inputs.games }} ${{ inputs.nodes }} $seed data_$i.txt ${{ inputs.mode }} \
               2> log_$i.txt &
           done
           wait || true

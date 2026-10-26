@@ -1,10 +1,12 @@
 #include "datagen.h"
 
 #include "movegen.h"
+#include "nnue.h"
 #include "position.h"
 #include "search.h"
 #include "tt.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cstdlib>
 #include <fstream>
@@ -52,7 +54,7 @@ const char* result_string(double r) { return r == 1.0 ? "1.0" : r == 0.0 ? "0.0"
 
 }  // namespace
 
-void datagen(int games, std::uint64_t nodes, std::uint64_t seed, const std::string& path) {
+void datagen(int games, std::uint64_t nodes, std::uint64_t seed, const std::string& path, bool guided) {
     std::ofstream out(path, std::ios::app);
     if (!out) {
         std::cout << "info string cannot open " << path << std::endl;
@@ -63,7 +65,12 @@ void datagen(int games, std::uint64_t nodes, std::uint64_t seed, const std::stri
     SearchLimits limits;
     limits.nodes = nodes;
 
-    std::uint64_t total_positions = 0;
+    std::uint64_t total_positions = 0, total_nodes = 0, total_moves = 0;
+    // Running mean of the uncertainty and of the clamped raw budgets; rescaling by the latter keeps the average
+    // budget exactly `nodes`, so guided and plain generation use the same compute.
+    double unc_sum = 75.0, unc_count = 1.0, raw_sum = 0.0;
+    guided = guided && Position::nnue_enabled && nnue::has_uncertainty();
+    if (guided) std::cerr << "guided datagen: node budget scaled by network uncertainty" << std::endl;
     auto start = std::chrono::steady_clock::now();
     int played = 0;
     while (played < games) {
@@ -87,7 +94,18 @@ void datagen(int games, std::uint64_t nodes, std::uint64_t seed, const std::stri
             if (pos.is_draw() || ply >= MAX_GAME_PLIES) break;
 
             searcher->clear_stop();
-            SearchResult r = searcher->search(pos, limits, false);
+            SearchLimits move_limits = limits;
+            if (guided && !pos.in_check()) {
+                int u = std::max(1, nnue::uncertainty(pos.accumulator(), pos.side_to_move(), popcount(pos.pieces())));
+                unc_sum += u;
+                unc_count += 1.0;
+                double raw = std::clamp(double(nodes) * u / (unc_sum / unc_count), nodes / 3.0, nodes * 3.0);
+                raw_sum += raw;
+                move_limits.nodes = std::uint64_t(raw * double(nodes) * (unc_count - 1.0) / raw_sum);
+            }
+            SearchResult r = searcher->search(pos, move_limits, false);
+            total_nodes += move_limits.nodes;
+            ++total_moves;
             Value white = pos.side_to_move() == WHITE ? r.score : -r.score;
 
             if (!pos.in_check() && !is_capture(r.best) && !is_promotion(r.best) && std::abs(r.score) < MAX_RECORD_SCORE)
@@ -111,7 +129,8 @@ void datagen(int games, std::uint64_t nodes, std::uint64_t seed, const std::stri
         if (played % 10 == 0 || played == games) {
             double secs = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
             std::cerr << "games " << played << " positions " << total_positions << " pos/s "
-                      << int(total_positions / (secs > 0 ? secs : 1)) << std::endl;
+                      << int(total_positions / (secs > 0 ? secs : 1)) << " avg_nodes "
+                      << (total_moves ? total_nodes / total_moves : 0) << std::endl;
         }
     }
 }
