@@ -193,11 +193,15 @@ bool Position::set_fen(const std::string& fen) {
     states_.push_back(st);
     states_.back().key = compute_key();
     update_check_info();
-    acc_.clear();
+    acc_top_ = acc_ready_ = 0;
     if (nnue_enabled) {
-        acc_.reserve(MAX_PLY + 64);
-        acc_.emplace_back();
-        nnue::refresh(acc_.back(), board_);
+        if (acc_.empty()) {
+            acc_.reserve(MAX_PLY + 64);
+            deltas_.reserve(MAX_PLY + 64);
+            acc_.emplace_back();
+            deltas_.emplace_back();
+        }
+        nnue::refresh(acc_[0], board_);
     }
     return true;
 }
@@ -365,8 +369,11 @@ void Position::make_move(Move m) {
     k ^= zobrist::castling[ns.castling];
 
     if (nnue_enabled) {
-        acc_.emplace_back();
-        nnue::update(acc_[acc_.size() - 2], acc_.back(), delta);
+        if (++acc_top_ == acc_.size()) {
+            acc_.emplace_back();
+            deltas_.emplace_back();
+        }
+        deltas_[acc_top_] = delta;
     }
 
     k ^= zobrist::side;
@@ -394,7 +401,7 @@ void Position::unmake_move(Move m) {
     }
     if (st.captured != NO_PIECE) put(st.captured, flag == EP_CAPTURE ? to - up(us) : to);
     states_.pop_back();
-    if (nnue_enabled) acc_.pop_back();
+    if (nnue_enabled) acc_ready_ = std::min(acc_ready_, --acc_top_);
 }
 
 void Position::make_null() {

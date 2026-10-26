@@ -69,7 +69,11 @@ public:
     U64 compute_key() const;
     // True while a network is loaded and UseNNUE is on; accumulators are only maintained then.
     static inline bool nnue_enabled = false;
-    const nnue::Accumulator& accumulator() const { return acc_.back(); }
+    // Brings the current accumulator up to date on first use, so positions that are never evaluated cost nothing.
+    const nnue::Accumulator& accumulator() const {
+        for (; acc_ready_ < acc_top_; ++acc_ready_) nnue::update(acc_[acc_ready_], acc_[acc_ready_ + 1], deltas_[acc_ready_ + 1]);
+        return acc_[acc_top_];
+    }
 
     int psq_mg() const { return psq_mg_; }
     int psq_eg() const { return psq_eg_; }
@@ -93,7 +97,11 @@ private:
     int start_ply_;
     int psq_mg_ = 0, psq_eg_ = 0, phase_ = 0;
     std::vector<StateInfo> states_;
-    std::vector<nnue::Accumulator> acc_;
+    // Accumulator stack [0, acc_top_] with the input change that led to each entry; [0, acc_ready_] are computed.
+    mutable std::vector<nnue::Accumulator> acc_;
+    std::vector<nnue::Delta> deltas_;
+    std::size_t acc_top_ = 0;
+    mutable std::size_t acc_ready_ = 0;
 };
 
 }  // namespace tsurugi

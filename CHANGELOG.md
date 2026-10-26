@@ -57,6 +57,8 @@ All strength figures are SPRT results against the previous version (fastchess, U
 - AVX2 kernel for the network output and single-pass accumulator updates: the same search in roughly half the
   CPU time with the 1024-neuron network (identical evaluations and node counts). Actions builds now use the
   runner's native instruction set.
+- Lazy accumulator updates: a move's network inputs are applied only when that position is evaluated, about 15%
+  more nodes per second with identical node counts.
 - Fixed: a `stop` that arrived before the search thread started was lost, so the engine could search forever
   and ignore later commands (seen under heavy CPU load).
 - Time management scales with the time control and never starts an iteration it cannot finish.
