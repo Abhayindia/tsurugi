@@ -713,6 +713,12 @@ SearchResult Searcher::search(Position& pos, const SearchLimits& limits, bool ve
     for (auto& f : stack_) f.static_eval = VALUE_NONE;
     root_count_ = 0;
     int stability = 0;
+    // How unsure the network is about the root position: unclear positions get more time, clear ones less.
+    double unc_f = 1.0;
+    if (Features.unc_tm && Position::nnue_enabled && nnue::has_uncertainty() && !pos.in_check()) {
+        int u = nnue::uncertainty(pos.accumulator(), pos.side_to_move(), popcount(pos.pieces()));
+        unc_f = std::clamp(1.0 + (u - 75) / 250.0, 0.85, 1.25);
+    }
 
     SearchResult result;
     MoveList legal_moves;
@@ -773,6 +779,7 @@ SearchResult Searcher::search(Position& pos, const SearchLimits& limits, bool ve
             double score_f = std::clamp(1.0 + 0.01 * (prev_score - v), 0.85, 1.5);
             scale = nodes_f * stab_f * score_f;
         }
+        scale *= unc_f;
         if (soft_ >= 0 && elapsed() >= soft_ * 2 / 5 * scale) break;
         if (node_limit_ && nodes_ >= node_limit_) break;
     }

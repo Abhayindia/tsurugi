@@ -48,6 +48,7 @@ struct SearchFeatures {
     bool unc_lmr = false;
     bool unc_prune2 = false;
     bool unc_lmr2 = false;
+    bool unc_tm = false;
     bool lmr_history = false;
     bool cuckoo = false;
     bool cont_corr = false;
