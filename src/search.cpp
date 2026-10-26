@@ -615,6 +615,9 @@ Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int p
             }
             v = -negamax(pos, -alpha - 1, -alpha, new_depth - r, ply + 1, true);
             if (v > alpha && r > 0) {
+                // A reduced score far above the best so far earns a deeper re-search, a marginal one a shallower one.
+                if (Features.lmr_deeper)
+                    new_depth += (v > best + 40 + 2 * new_depth) - (v < best + new_depth);
                 v = -negamax(pos, -alpha - 1, -alpha, new_depth, ply + 1, !cut);
                 // The reduced search was wrong about this move: tell continuation history how it really did.
                 if (Features.lmr_history && Features.cont_history && quiet) {

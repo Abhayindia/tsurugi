@@ -46,6 +46,7 @@ const Toggle TOGGLES[] = {
     {"ThreatHistory", &Features.threat_history}, {"EvalDropHist", &Features.eval_drop_hist},
     {"CaptHistSEE", &Features.capt_hist_see}, {"HistPrune", &Features.hist_prune},
     {"QsFutility", &Features.qs_futility},
+    {"LmrDeeper", &Features.lmr_deeper},
     {"EvalMobility", &EvalTerms.mobility},   {"EvalPawnStructure", &EvalTerms.pawn_structure},
     {"EvalPassedPawns", &EvalTerms.passed_pawns}, {"EvalPassedPawns2", &EvalTerms.passed_pawns2},
     {"EvalKingSafety", &EvalTerms.king_safety},
