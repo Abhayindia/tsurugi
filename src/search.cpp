@@ -448,6 +448,10 @@ Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int p
     }
     bool improving = !in_check && ply >= 2 && stack_[ply - 2].static_eval != VALUE_NONE &&
                      eval > stack_[ply - 2].static_eval;
+    // A TT score whose bound points the same way as the gap is a better estimate than the static eval.
+    if (Features.tt_eval && !in_check && eval != VALUE_NONE && tt_value != VALUE_NONE &&
+        std::abs(tt_value) < VALUE_MATE_IN_MAX_PLY && (tte.bound() & (tt_value > eval ? BOUND_LOWER : BOUND_UPPER)))
+        eval = tt_value;
     stack_[ply + 1].killers[0] = stack_[ply + 1].killers[1] = NO_MOVE;
 
     if (!pv && !in_check && excluded == NO_MOVE) {
