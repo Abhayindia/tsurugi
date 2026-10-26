@@ -71,7 +71,12 @@ public:
     static inline bool nnue_enabled = false;
     // Brings the current accumulator up to date on first use, so positions that are never evaluated cost nothing.
     const nnue::Accumulator& accumulator() const {
-        for (; acc_ready_ < acc_top_; ++acc_ready_) nnue::update(acc_[acc_ready_], acc_[acc_ready_ + 1], deltas_[acc_ready_ + 1]);
+        std::size_t i = acc_top_;
+        while (!acc_ok_[i]) --i;
+        for (; i < acc_top_; ++i) {
+            nnue::update(acc_[i], acc_[i + 1], deltas_[i + 1]);
+            acc_ok_[i + 1] = 1;
+        }
         return acc_[acc_top_];
     }
 
@@ -97,11 +102,12 @@ private:
     int start_ply_;
     int psq_mg_ = 0, psq_eg_ = 0, phase_ = 0;
     std::vector<StateInfo> states_;
-    // Accumulator stack [0, acc_top_] with the input change that led to each entry; [0, acc_ready_] are computed.
+    // Accumulator stack [0, acc_top_] with the input change that led to each entry; acc_ok_ marks computed entries
+    // (entry 0, and entries rebuilt from the board when a king changed its input bucket, always are).
     mutable std::vector<nnue::Accumulator> acc_;
     std::vector<nnue::Delta> deltas_;
+    mutable std::vector<char> acc_ok_;
     std::size_t acc_top_ = 0;
-    mutable std::size_t acc_ready_ = 0;
 };
 
 }  // namespace tsurugi

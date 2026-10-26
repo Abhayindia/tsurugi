@@ -14,7 +14,7 @@ namespace tsurugi::nnue {
 namespace {
 
 struct Network {
-    alignas(64) std::int16_t ft_w[768][HIDDEN];
+    alignas(64) std::int16_t ft_w[768 * MAX_KING_BUCKETS][HIDDEN];
     alignas(64) std::int16_t ft_b[HIDDEN];
     alignas(64) std::int16_t out_w[MAX_BUCKETS][2 * HIDDEN];
     std::int32_t out_b[MAX_BUCKETS];
@@ -31,6 +31,8 @@ std::string desc = "none";
 
 }  // namespace
 
+int king_layout = 0;
+
 bool load(const std::string& path) {
     std::ifstream in(path, std::ios::binary);
     if (!in) return false;
@@ -39,13 +41,15 @@ bool load(const std::string& path) {
     in.read(magic, 4);
     in.read(reinterpret_cast<char*>(&version), 4);
     in.read(reinterpret_cast<char*>(&hidden), 4);
-    if (!in || std::memcmp(magic, "TSRG", 4) != 0 || (version < 1 || version > 3) || hidden != HIDDEN) return false;
-    std::uint32_t buckets = 1;
+    if (!in || std::memcmp(magic, "TSRG", 4) != 0 || (version < 1 || version > 4) || hidden != HIDDEN) return false;
+    std::uint32_t buckets = 1, layout = 0;
     if (version >= 2) in.read(reinterpret_cast<char*>(&buckets), 4);
-    if (!in || buckets < 1 || buckets > MAX_BUCKETS) return false;
+    if (version == 4) in.read(reinterpret_cast<char*>(&layout), 4);
+    if (!in || buckets < 1 || buckets > MAX_BUCKETS || layout > 1) return false;
+    int king_buckets = layout == 1 ? 4 : 1;
     auto tmp = std::make_unique<Network>();
     tmp->buckets = int(buckets);
-    in.read(reinterpret_cast<char*>(tmp->ft_w), sizeof(tmp->ft_w));
+    in.read(reinterpret_cast<char*>(tmp->ft_w), std::streamsize(sizeof(std::int16_t) * 768 * king_buckets * HIDDEN));
     in.read(reinterpret_cast<char*>(tmp->ft_b), sizeof(tmp->ft_b));
     for (std::uint32_t b = 0; b < buckets; ++b) in.read(reinterpret_cast<char*>(tmp->out_w[b]), sizeof(tmp->out_w[b]));
     in.read(reinterpret_cast<char*>(tmp->out_b), std::streamsize(sizeof(std::int32_t) * buckets));
@@ -58,6 +62,7 @@ bool load(const std::string& path) {
     }
     if (!in || in.peek() != std::char_traits<char>::eof()) return false;
     net = *tmp;
+    king_layout = int(layout);
     is_loaded = true;
     desc = path;
     return true;
@@ -67,30 +72,18 @@ bool loaded() { return is_loaded; }
 const std::string& description() { return desc; }
 
 void refresh(Accumulator& acc, const Piece board[SQUARE_NB]) {
-    for (int c = 0; c < COLOR_NB; ++c) std::memcpy(acc.v[c], net.ft_b, sizeof(net.ft_b));
-    for (int s = 0; s < 64; ++s)
-        if (board[s] != NO_PIECE) add(acc, board[s], s);
-}
-
-void add(Accumulator& acc, Piece p, int s) {
-    for (int c = 0; c < COLOR_NB; ++c) {
-        const std::int16_t* w = net.ft_w[feature(Color(c), p, s)];
-        for (int i = 0; i < HIDDEN; ++i) acc.v[c][i] += w[i];
+    int ksq[COLOR_NB] = {0, 0};
+    for (int s = 0; s < 64; ++s) {
+        if (board[s] == W_KING) ksq[WHITE] = s;
+        if (board[s] == B_KING) ksq[BLACK] = s;
     }
-}
-
-void sub(Accumulator& acc, Piece p, int s) {
     for (int c = 0; c < COLOR_NB; ++c) {
-        const std::int16_t* w = net.ft_w[feature(Color(c), p, s)];
-        for (int i = 0; i < HIDDEN; ++i) acc.v[c][i] -= w[i];
-    }
-}
-
-void move(Accumulator& acc, Piece p, int from, int to) {
-    for (int c = 0; c < COLOR_NB; ++c) {
-        const std::int16_t* wf = net.ft_w[feature(Color(c), p, from)];
-        const std::int16_t* wt = net.ft_w[feature(Color(c), p, to)];
-        for (int i = 0; i < HIDDEN; ++i) acc.v[c][i] += wt[i] - wf[i];
+        std::memcpy(acc.v[c], net.ft_b, sizeof(net.ft_b));
+        for (int s = 0; s < 64; ++s) {
+            if (board[s] == NO_PIECE) continue;
+            const std::int16_t* w = net.ft_w[feature(Color(c), board[s], s, ksq[c])];
+            for (int i = 0; i < HIDDEN; ++i) acc.v[c][i] += w[i];
+        }
     }
 }
 
@@ -98,16 +91,16 @@ void update(const Accumulator& src, Accumulator& dst, const Delta& d) {
     for (int c = 0; c < COLOR_NB; ++c) {
         const std::int16_t* __restrict s = src.v[c];
         std::int16_t* __restrict o = dst.v[c];
-        const std::int16_t* a0 = net.ft_w[feature(Color(c), d.add_p[0], d.add_s[0])];
-        const std::int16_t* s0 = net.ft_w[feature(Color(c), d.sub_p[0], d.sub_s[0])];
+        const std::int16_t* a0 = net.ft_w[feature(Color(c), d.add_p[0], d.add_s[0], d.ksq[c])];
+        const std::int16_t* s0 = net.ft_w[feature(Color(c), d.sub_p[0], d.sub_s[0], d.ksq[c])];
         if (d.adds == 1 && d.subs == 1) {
             for (int i = 0; i < HIDDEN; ++i) o[i] = s[i] + a0[i] - s0[i];
         } else if (d.adds == 1 && d.subs == 2) {
-            const std::int16_t* s1 = net.ft_w[feature(Color(c), d.sub_p[1], d.sub_s[1])];
+            const std::int16_t* s1 = net.ft_w[feature(Color(c), d.sub_p[1], d.sub_s[1], d.ksq[c])];
             for (int i = 0; i < HIDDEN; ++i) o[i] = s[i] + a0[i] - s0[i] - s1[i];
         } else {
-            const std::int16_t* a1 = net.ft_w[feature(Color(c), d.add_p[1], d.add_s[1])];
-            const std::int16_t* s1 = net.ft_w[feature(Color(c), d.sub_p[1], d.sub_s[1])];
+            const std::int16_t* a1 = net.ft_w[feature(Color(c), d.add_p[1], d.add_s[1], d.ksq[c])];
+            const std::int16_t* s1 = net.ft_w[feature(Color(c), d.sub_p[1], d.sub_s[1], d.ksq[c])];
             for (int i = 0; i < HIDDEN; ++i) o[i] = s[i] + a0[i] + a1[i] - s0[i] - s1[i];
         }
     }

@@ -18,28 +18,45 @@ import torch.nn as nn
 from shards import load
 
 SCALE, QA, QB = 400.0, 255, 64
-PAD = 768
 WEIGHT_CLIP = 127 / QB  # keeps every quantised weight inside int16 and the output sum inside int32
 
 
-def views(f):
-    """Feature indices from White's and Black's point of view (Black's: colours swapped, ranks flipped).
+KING_BUCKETS = {0: 1, 1: 4}  # king layout -> number of input buckets (see src/nnue.h)
 
-    Works on a torch tensor of int16 indices (-1 = empty slot) on any device."""
+
+def king_bucket(kv):
+    return torch.where(kv < 8, torch.where((kv & 7) < 2, 0, 1), torch.where(kv < 16, 2, 3))
+
+
+def views(f, layout=0):
+    """Feature indices from White's and Black's point of view (Black's: colours swapped, ranks flipped), exactly as
+    the engine computes them; layout 1 adds king input buckets with the board mirrored onto the king's half.
+
+    Works on a torch tensor of int16 indices (-1 = empty slot) on any device; empty slots map to the padding row."""
     f = f.long()
     valid = f >= 0
     c, rest = f // 384, f % 384
     t, sq = rest // 64, rest % 64
-    black = (1 - c) * 384 + t * 64 + (sq ^ 56)
-    pad = torch.full_like(f, PAD)
-    return torch.where(valid, f, pad), torch.where(valid, black, pad)
+    pad = torch.full_like(f, 768 * KING_BUCKETS[layout])
+    if layout == 0:
+        black = (1 - c) * 384 + t * 64 + (sq ^ 56)
+        return torch.where(valid, f, pad), torch.where(valid, black, pad)
+    p = c * 6 + t
+    wk = torch.where((f >= 320) & (f < 384), f - 320, 0).max(1, keepdim=True).values
+    bk = torch.where((f >= 704) & (f < 768), f - 704, 0).max(1, keepdim=True).values ^ 56
+    mw, mb = (wk & 7) >= 4, (bk & 7) >= 4
+    white = king_bucket(torch.where(mw, wk ^ 7, wk)) * 768 + p * 64 + torch.where(mw, sq ^ 7, sq)
+    sb = sq ^ 56
+    black = king_bucket(torch.where(mb, bk ^ 7, bk)) * 768 + ((p + 6) % 12) * 64 + torch.where(mb, sb ^ 7, sb)
+    return torch.where(valid, white, pad), torch.where(valid, black, pad)
 
 
 class Net(nn.Module):
-    def __init__(self, hidden, buckets=1):
+    def __init__(self, hidden, buckets=1, layout=0):
         super().__init__()
-        self.buckets = buckets
-        self.ft = nn.EmbeddingBag(PAD + 1, hidden, mode="sum", padding_idx=PAD)
+        self.buckets, self.layout = buckets, layout
+        self.pad = 768 * KING_BUCKETS[layout]
+        self.ft = nn.EmbeddingBag(self.pad + 1, hidden, mode="sum", padding_idx=self.pad)
         self.ft_bias = nn.Parameter(torch.zeros(hidden))
         self.out = nn.Linear(2 * hidden, buckets)
         nn.init.normal_(self.ft.weight, std=0.01)
@@ -53,19 +70,21 @@ class Net(nn.Module):
         if self.buckets == 1:
             return out.squeeze(1)
         # Same bucket as the engine: the piece count (kings included) split evenly over 2..32.
-        pieces = (white != PAD).sum(1)
+        pieces = (white != self.pad).sum(1)
         bucket = torch.clamp((pieces - 2) * self.buckets // 32, 0, self.buckets - 1)
         return out.gather(1, bucket.unsqueeze(1)).squeeze(1)
 
 
 def export(net, path, hidden):
-    ft_w = np.round(net.ft.weight.detach().cpu().numpy()[:PAD] * QA).astype(np.int16)  # [768, H]
+    ft_w = np.round(net.ft.weight.detach().cpu().numpy()[:net.pad] * QA).astype(np.int16)  # [K*768, H]
     ft_b = np.round(net.ft_bias.detach().cpu().numpy() * QA).astype(np.int16)           # [H]
     out_w = np.round(net.out.weight.detach().cpu().numpy() * QB).astype(np.int16)       # [B, 2H]
     out_b = [int(round(float(x) * QA * QB)) for x in net.out.bias.detach().cpu()]       # [B]
     with open(path, "wb") as fh:
         fh.write(b"TSRG")
-        if net.buckets == 1:
+        if net.layout:
+            fh.write(struct.pack("<IIII", 4, hidden, net.buckets, net.layout))
+        elif net.buckets == 1:
             fh.write(struct.pack("<II", 1, hidden))
         else:
             fh.write(struct.pack("<III", 2, hidden, net.buckets))
@@ -82,6 +101,7 @@ def main():
     ap.add_argument("--epochs", type=int, default=20)
     ap.add_argument("--hidden", type=int, default=256)
     ap.add_argument("--buckets", type=int, default=1, help="output buckets by piece count (1 or 8)")
+    ap.add_argument("--king-layout", type=int, default=0, help="0 = no king buckets, 1 = 4 mirrored king buckets")
     ap.add_argument("--batch", type=int, default=16384)
     ap.add_argument("--lr", type=float, default=1e-3)
     ap.add_argument("--limit", type=int, default=0)
@@ -102,13 +122,13 @@ def main():
     val_idx, train_idx = perm[:n_val], perm[n_val:]
     print(f"{len(train_idx)} training / {n_val} validation positions", flush=True)
 
-    net = Net(a.hidden, a.buckets).to(dev)
+    net = Net(a.hidden, a.buckets, a.king_layout).to(dev)
     opt = torch.optim.Adam(net.parameters(), lr=a.lr)
     sched = torch.optim.lr_scheduler.StepLR(opt, step_size=max(1, a.epochs // 3), gamma=0.3)
 
     # Only the compact int16 features cross to the device; the index arithmetic runs there.
     def batch(idx):
-        w, b = views(torch.from_numpy(f[idx]).to(dev, non_blocking=True))
+        w, b = views(torch.from_numpy(f[idx]).to(dev, non_blocking=True), a.king_layout)
         return w, b, torch.from_numpy(s[idx].astype(np.int64)).to(dev), make_target(idx)
 
     def make_target(idx):
@@ -147,7 +167,7 @@ def main():
         export(net, a.out, a.hidden)
 
     Path(a.out).with_suffix(".json").write_text(json.dumps(
-        {"data": a.data, "positions": len(c), "hidden": a.hidden, "buckets": a.buckets, "epochs": a.epochs, "batch": a.batch, "lr": a.lr, "wdl": a.wdl,
+        {"data": a.data, "positions": len(c), "hidden": a.hidden, "buckets": a.buckets, "king_layout": a.king_layout, "epochs": a.epochs, "batch": a.batch, "lr": a.lr, "wdl": a.wdl,
          "scale": SCALE, "qa": QA, "qb": QB, "history": history}, indent=1))
 
 

@@ -193,15 +193,18 @@ bool Position::set_fen(const std::string& fen) {
     states_.push_back(st);
     states_.back().key = compute_key();
     update_check_info();
-    acc_top_ = acc_ready_ = 0;
+    acc_top_ = 0;
     if (nnue_enabled) {
         if (acc_.empty()) {
             acc_.reserve(MAX_PLY + 64);
             deltas_.reserve(MAX_PLY + 64);
+            acc_ok_.reserve(MAX_PLY + 64);
             acc_.emplace_back();
             deltas_.emplace_back();
+            acc_ok_.push_back(0);
         }
         nnue::refresh(acc_[0], board_);
+        acc_ok_[0] = 1;
     }
     return true;
 }
@@ -308,6 +311,7 @@ void Position::make_move(Move m) {
     Piece pc = board_[from];
     U64 k = ns.key;
     nnue::Delta delta;
+    int king_key_before = nnue_enabled ? nnue::king_key(us, lsb(pieces(us, KING))) : 0;
 
     ns.rule50++;
     ns.plies_from_null++;
@@ -372,8 +376,18 @@ void Position::make_move(Move m) {
         if (++acc_top_ == acc_.size()) {
             acc_.emplace_back();
             deltas_.emplace_back();
+            acc_ok_.push_back(0);
         }
+        delta.ksq[WHITE] = lsb(pieces(WHITE, KING));
+        delta.ksq[BLACK] = lsb(pieces(BLACK, KING));
         deltas_[acc_top_] = delta;
+        // A king that changed its input bucket (or side of the board) changes every feature: rebuild now.
+        if (nnue::king_key(us, delta.ksq[us]) != king_key_before) {
+            nnue::refresh(acc_[acc_top_], board_);
+            acc_ok_[acc_top_] = 1;
+        } else {
+            acc_ok_[acc_top_] = 0;
+        }
     }
 
     k ^= zobrist::side;
@@ -401,7 +415,7 @@ void Position::unmake_move(Move m) {
     }
     if (st.captured != NO_PIECE) put(st.captured, flag == EP_CAPTURE ? to - up(us) : to);
     states_.pop_back();
-    if (nnue_enabled) acc_ready_ = std::min(acc_ready_, --acc_top_);
+    if (nnue_enabled) --acc_top_;
 }
 
 void Position::make_null() {

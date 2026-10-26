@@ -21,48 +21,68 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from shards import load  # noqa: E402
 
 SCALE, QA, QB = 400.0, 255, 64
-PAD = 768
+KING_BUCKETS = {0: 1, 1: 4}  # king layout -> number of input buckets (see src/nnue.h)
 WEIGHT_CLIP = 127 / QB
 
 
-def views(f):
-    """Feature indices from White's and Black's point of view; empty slots map to the zero row PAD."""
+def king_bucket(kv):
+    return jnp.where(kv < 8, jnp.where((kv & 7) < 2, 0, 1), jnp.where(kv < 16, 2, 3))
+
+
+def views(f, layout=0):
+    """Feature indices from White's and Black's point of view, exactly as the engine computes them (layout 1: king
+    input buckets, board mirrored onto the king's half); empty slots map to the zero padding row."""
     f = f.astype(jnp.int32)
     valid = f >= 0
     c, rest = f // 384, f % 384
     t, sq = rest // 64, rest % 64
-    black = (1 - c) * 384 + t * 64 + (sq ^ 56)
-    return jnp.where(valid, f, PAD), jnp.where(valid, black, PAD)
+    pad = 768 * KING_BUCKETS[layout]
+    if layout == 0:
+        black = (1 - c) * 384 + t * 64 + (sq ^ 56)
+        return jnp.where(valid, f, pad), jnp.where(valid, black, pad)
+    p = c * 6 + t
+    wk = jnp.max(jnp.where((f >= 320) & (f < 384), f - 320, 0), axis=1, keepdims=True)
+    bk = jnp.max(jnp.where((f >= 704) & (f < 768), f - 704, 0), axis=1, keepdims=True) ^ 56
+    mw, mb = (wk & 7) >= 4, (bk & 7) >= 4
+    white = king_bucket(jnp.where(mw, wk ^ 7, wk)) * 768 + p * 64 + jnp.where(mw, sq ^ 7, sq)
+    sb = sq ^ 56
+    black = king_bucket(jnp.where(mb, bk ^ 7, bk)) * 768 + ((p + 6) % 12) * 64 + jnp.where(mb, sb ^ 7, sb)
+    return jnp.where(valid, white, pad), jnp.where(valid, black, pad)
 
 
-def init(key, hidden, buckets):
+def init(key, hidden, buckets, layout=0):
     k1, k2, k3 = jax.random.split(key, 3)
     bound = 1.0 / np.sqrt(2 * hidden)
-    ft_w = jax.random.normal(k1, (PAD + 1, hidden)) * 0.01
-    return {"ft_w": ft_w.at[PAD].set(0.0), "ft_b": jnp.zeros(hidden),
+    pad = 768 * KING_BUCKETS[layout]
+    ft_w = jax.random.normal(k1, (pad + 1, hidden)) * 0.01
+    return {"ft_w": ft_w.at[pad].set(0.0), "ft_b": jnp.zeros(hidden),
             "out_w": jax.random.uniform(k2, (buckets, 2 * hidden), minval=-bound, maxval=bound),
             "out_b": jax.random.uniform(k3, (buckets,), minval=-bound, maxval=bound)}
 
 
-def forward(p, feats, stm, buckets):
-    white, black = views(feats)
+def forward(p, feats, stm, buckets, layout=0):
+    pad = 768 * KING_BUCKETS[layout]
+    white, black = views(feats, layout)
     w = p["ft_w"][white].sum(1) + p["ft_b"]
     b = p["ft_w"][black].sum(1) + p["ft_b"]
     s = (stm == 1)[:, None]
     x = jnp.clip(jnp.concatenate([jnp.where(s, b, w), jnp.where(s, w, b)], 1), 0.0, 1.0)
-    pieces = (white != PAD).sum(1)
+    pieces = (white != pad).sum(1)
     k = jnp.clip((pieces - 2) * buckets // 32, 0, buckets - 1) if buckets > 1 else jnp.zeros_like(pieces)
     return (x * p["out_w"][k]).sum(1) + p["out_b"][k]
 
 
-def export(p, path, hidden, buckets):
-    ft_w = np.round(np.asarray(p["ft_w"])[:PAD] * QA).astype(np.int16)
+def export(p, path, hidden, buckets, layout=0):
+    ft_w = np.round(np.asarray(p["ft_w"])[:768 * KING_BUCKETS[layout]] * QA).astype(np.int16)
     ft_b = np.round(np.asarray(p["ft_b"]) * QA).astype(np.int16)
     out_w = np.round(np.asarray(p["out_w"]) * QB).astype(np.int16)
     out_b = [int(round(float(x) * QA * QB)) for x in np.asarray(p["out_b"])]
     with open(path, "wb") as fh:
         fh.write(b"TSRG")
-        fh.write(struct.pack("<II", 1, hidden) if buckets == 1 else struct.pack("<III", 2, hidden, buckets))
+        if layout:
+            fh.write(struct.pack("<IIII", 4, hidden, buckets, layout))
+        else:
+            fh.write(struct.pack("<II", 1, hidden) if buckets == 1 else struct.pack("<III", 2, hidden, buckets))
         fh.write(ft_w.tobytes())
         fh.write(ft_b.tobytes())
         fh.write(out_w.tobytes())
@@ -76,6 +96,7 @@ def main():
     ap.add_argument("--epochs", type=int, default=20)
     ap.add_argument("--hidden", type=int, default=256)
     ap.add_argument("--buckets", type=int, default=1)
+    ap.add_argument("--king-layout", type=int, default=0, help="0 = no king buckets, 1 = 4 mirrored king buckets")
     ap.add_argument("--batch", type=int, default=16384)
     ap.add_argument("--lr", type=float, default=1e-3)
     ap.add_argument("--limit", type=int, default=0)
@@ -102,18 +123,19 @@ def main():
     sched = optax.piecewise_constant_schedule(
         a.lr, {steps_per_epoch * max(1, a.epochs // 3) * i: 0.3 for i in range(1, 4)})
     opt = optax.adam(sched)
-    params = jax.device_put(init(jax.random.PRNGKey(1), a.hidden, a.buckets), repl)
+    params = jax.device_put(init(jax.random.PRNGKey(1), a.hidden, a.buckets, a.king_layout), repl)
+    pad = 768 * KING_BUCKETS[a.king_layout]
     opt_state = jax.device_put(opt.init(params), repl)
 
     def loss_fn(p, feats, stm, tgt):
-        return jnp.mean((jax.nn.sigmoid(forward(p, feats, stm, a.buckets)) - tgt) ** 2)
+        return jnp.mean((jax.nn.sigmoid(forward(p, feats, stm, a.buckets, a.king_layout)) - tgt) ** 2)
 
     @jax.jit
     def step(p, st, feats, stm, tgt):
         loss, g = jax.value_and_grad(loss_fn)(p, feats, stm, tgt)
         upd, st = opt.update(g, st, p)
         p = optax.apply_updates(p, upd)
-        p = {**p, "ft_w": jnp.clip(p["ft_w"], -WEIGHT_CLIP, WEIGHT_CLIP).at[PAD].set(0.0),
+        p = {**p, "ft_w": jnp.clip(p["ft_w"], -WEIGHT_CLIP, WEIGHT_CLIP).at[pad].set(0.0),
              "out_w": jnp.clip(p["out_w"], -WEIGHT_CLIP, WEIGHT_CLIP)}
         return p, st, loss
 
@@ -136,10 +158,10 @@ def main():
         history.append({"epoch": epoch + 1, "train_loss": float(jnp.mean(jnp.stack(losses))), "val_loss": val,
                         "seconds": round(time.time() - t0)})
         print(json.dumps(history[-1]), flush=True)
-        export(jax.device_get(params), a.out, a.hidden, a.buckets)
+        export(jax.device_get(params), a.out, a.hidden, a.buckets, a.king_layout)
 
     Path(a.out).with_suffix(".json").write_text(json.dumps(
-        {"data": a.data, "positions": len(c), "hidden": a.hidden, "buckets": a.buckets, "epochs": a.epochs,
+        {"data": a.data, "positions": len(c), "hidden": a.hidden, "buckets": a.buckets, "king_layout": a.king_layout, "epochs": a.epochs,
          "batch": batch, "lr": a.lr, "wdl": a.wdl, "trainer": "jax", "devices": len(devices),
          "scale": SCALE, "qa": QA, "qb": QB, "history": history}, indent=1))
 
