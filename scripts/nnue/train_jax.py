@@ -50,21 +50,39 @@ def views(f, layout=0):
     return jnp.where(valid, white, pad), jnp.where(valid, black, pad)
 
 
-def init(key, hidden, buckets, layout=0):
+def init(key, hidden, buckets, layout=0, factorize=False):
     k1, k2, k3 = jax.random.split(key, 3)
     bound = 1.0 / np.sqrt(2 * hidden)
     pad = 768 * KING_BUCKETS[layout]
     ft_w = jax.random.normal(k1, (pad + 1, hidden)) * 0.01
-    return {"ft_w": ft_w.at[pad].set(0.0), "ft_b": jnp.zeros(hidden),
-            "out_w": jax.random.uniform(k2, (buckets, 2 * hidden), minval=-bound, maxval=bound),
-            "out_b": jax.random.uniform(k3, (buckets,), minval=-bound, maxval=bound)}
+    p = {"ft_w": ft_w.at[pad].set(0.0), "ft_b": jnp.zeros(hidden),
+         "out_w": jax.random.uniform(k2, (buckets, 2 * hidden), minval=-bound, maxval=bound),
+         "out_b": jax.random.uniform(k3, (buckets,), minval=-bound, maxval=bound)}
+    if factorize and layout:
+        # Factoriser: piece-square weights shared by every king bucket, merged into each bucket at export.
+        p["fact"] = jnp.zeros((769, hidden))
+    return p
+
+
+def merged_ft(p, layout=0):
+    """The bucketed feature weights with the factoriser folded in: what the engine sees."""
+    pad = 768 * KING_BUCKETS[layout]
+    w = p["ft_w"][:pad]
+    return w if "fact" not in p else w + jnp.tile(p["fact"][:768], (KING_BUCKETS[layout], 1))
+
+
+def accumulate(p, idx, pad):
+    acc = p["ft_w"][idx].sum(1) + p["ft_b"]
+    if "fact" in p:
+        acc = acc + p["fact"][jnp.where(idx == pad, 768, idx % 768)].sum(1)
+    return acc
 
 
 def forward(p, feats, stm, buckets, layout=0):
     pad = 768 * KING_BUCKETS[layout]
     white, black = views(feats, layout)
-    w = p["ft_w"][white].sum(1) + p["ft_b"]
-    b = p["ft_w"][black].sum(1) + p["ft_b"]
+    w = accumulate(p, white, pad)
+    b = accumulate(p, black, pad)
     s = (stm == 1)[:, None]
     x = jnp.clip(jnp.concatenate([jnp.where(s, b, w), jnp.where(s, w, b)], 1), 0.0, 1.0)
     pieces = (white != pad).sum(1)
@@ -73,7 +91,7 @@ def forward(p, feats, stm, buckets, layout=0):
 
 
 def export(p, path, hidden, buckets, layout=0):
-    ft_w = np.round(np.asarray(p["ft_w"])[:768 * KING_BUCKETS[layout]] * QA).astype(np.int16)
+    ft_w = np.round(np.asarray(merged_ft(p, layout)) * QA).astype(np.int16)
     ft_b = np.round(np.asarray(p["ft_b"]) * QA).astype(np.int16)
     out_w = np.round(np.asarray(p["out_w"]) * QB).astype(np.int16)
     out_b = [int(round(float(x) * QA * QB)) for x in np.asarray(p["out_b"])]
@@ -97,6 +115,7 @@ def main():
     ap.add_argument("--hidden", type=int, default=256)
     ap.add_argument("--buckets", type=int, default=1)
     ap.add_argument("--king-layout", type=int, default=0, help="0 = no king buckets, 1 = 4 mirrored king buckets")
+    ap.add_argument("--factorize", action="store_true", help="train king buckets with a shared factoriser")
     ap.add_argument("--batch", type=int, default=16384)
     ap.add_argument("--lr", type=float, default=1e-3)
     ap.add_argument("--limit", type=int, default=0)
@@ -123,7 +142,7 @@ def main():
     sched = optax.piecewise_constant_schedule(
         a.lr, {steps_per_epoch * max(1, a.epochs // 3) * i: 0.3 for i in range(1, 4)})
     opt = optax.adam(sched)
-    params = jax.device_put(init(jax.random.PRNGKey(1), a.hidden, a.buckets, a.king_layout), repl)
+    params = jax.device_put(init(jax.random.PRNGKey(1), a.hidden, a.buckets, a.king_layout, a.factorize), repl)
     pad = 768 * KING_BUCKETS[a.king_layout]
     opt_state = jax.device_put(opt.init(params), repl)
 
@@ -135,8 +154,15 @@ def main():
         loss, g = jax.value_and_grad(loss_fn)(p, feats, stm, tgt)
         upd, st = opt.update(g, st, p)
         p = optax.apply_updates(p, upd)
-        p = {**p, "ft_w": jnp.clip(p["ft_w"], -WEIGHT_CLIP, WEIGHT_CLIP).at[pad].set(0.0),
-             "out_w": jnp.clip(p["out_w"], -WEIGHT_CLIP, WEIGHT_CLIP)}
+        if "fact" in p:
+            # Clip the merged weights (the ones exported), keeping the shared part inside the bound as well.
+            fact = jnp.clip(p["fact"], -WEIGHT_CLIP, WEIGHT_CLIP).at[768].set(0.0)
+            shared = jnp.tile(fact[:768], (KING_BUCKETS[a.king_layout], 1))
+            ft = jnp.clip(p["ft_w"][:pad] + shared, -WEIGHT_CLIP, WEIGHT_CLIP) - shared
+            p = {**p, "fact": fact, "ft_w": p["ft_w"].at[:pad].set(ft).at[pad].set(0.0)}
+        else:
+            p = {**p, "ft_w": jnp.clip(p["ft_w"], -WEIGHT_CLIP, WEIGHT_CLIP).at[pad].set(0.0)}
+        p = {**p, "out_w": jnp.clip(p["out_w"], -WEIGHT_CLIP, WEIGHT_CLIP)}
         return p, st, loss
 
     eval_loss = jax.jit(loss_fn)
@@ -161,7 +187,7 @@ def main():
         export(jax.device_get(params), a.out, a.hidden, a.buckets, a.king_layout)
 
     Path(a.out).with_suffix(".json").write_text(json.dumps(
-        {"data": a.data, "positions": len(c), "hidden": a.hidden, "buckets": a.buckets, "king_layout": a.king_layout, "epochs": a.epochs,
+        {"data": a.data, "positions": len(c), "hidden": a.hidden, "buckets": a.buckets, "king_layout": a.king_layout, "factorize": a.factorize, "epochs": a.epochs,
          "batch": batch, "lr": a.lr, "wdl": a.wdl, "trainer": "jax", "devices": len(devices),
          "scale": SCALE, "qa": QA, "qb": QB, "history": history}, indent=1))
 

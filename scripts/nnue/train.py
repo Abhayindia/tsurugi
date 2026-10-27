@@ -52,7 +52,7 @@ def views(f, layout=0):
 
 
 class Net(nn.Module):
-    def __init__(self, hidden, buckets=1, layout=0):
+    def __init__(self, hidden, buckets=1, layout=0, factorize=False):
         super().__init__()
         self.buckets, self.layout = buckets, layout
         self.pad = 768 * KING_BUCKETS[layout]
@@ -60,10 +60,37 @@ class Net(nn.Module):
         self.ft_bias = nn.Parameter(torch.zeros(hidden))
         self.out = nn.Linear(2 * hidden, buckets)
         nn.init.normal_(self.ft.weight, std=0.01)
+        # Factoriser: piece-square weights shared by every king bucket, trained alongside and merged into each
+        # bucket at export, so rarely seen buckets still learn from all positions. The file format is unchanged.
+        self.fact = None
+        if factorize and layout:
+            self.fact = nn.EmbeddingBag(769, hidden, mode="sum", padding_idx=768)
+            nn.init.zeros_(self.fact.weight)
+
+    def inputs(self, idx):
+        acc = self.ft(idx) + self.ft_bias
+        if self.fact is not None:
+            acc = acc + self.fact(torch.where(idx == self.pad, 768, idx % 768))
+        return acc
+
+    def merged_ft(self):
+        """The bucketed feature weights with the factoriser folded in: what the engine sees."""
+        w = self.ft.weight[:self.pad]
+        return w if self.fact is None else w + self.fact.weight[:768].repeat(KING_BUCKETS[self.layout], 1)
+
+    def clip(self):
+        with torch.no_grad():
+            if self.fact is None:
+                self.ft.weight.clamp_(-WEIGHT_CLIP, WEIGHT_CLIP)
+            else:
+                self.fact.weight.clamp_(-WEIGHT_CLIP, WEIGHT_CLIP)
+                shared = self.fact.weight[:768].repeat(KING_BUCKETS[self.layout], 1)
+                self.ft.weight[:self.pad] = (self.ft.weight[:self.pad] + shared).clamp(-WEIGHT_CLIP, WEIGHT_CLIP) - shared
+            self.out.weight.clamp_(-WEIGHT_CLIP, WEIGHT_CLIP)
 
     def forward(self, white, black, stm):
-        w = self.ft(white) + self.ft_bias
-        b = self.ft(black) + self.ft_bias
+        w = self.inputs(white)
+        b = self.inputs(black)
         s = stm.unsqueeze(1).bool()
         us, them = torch.where(s, b, w), torch.where(s, w, b)
         out = self.out(torch.clamp(torch.cat([us, them], 1), 0, 1))
@@ -76,7 +103,7 @@ class Net(nn.Module):
 
 
 def export(net, path, hidden):
-    ft_w = np.round(net.ft.weight.detach().cpu().numpy()[:net.pad] * QA).astype(np.int16)  # [K*768, H]
+    ft_w = np.round(net.merged_ft().detach().cpu().numpy() * QA).astype(np.int16)  # [K*768, H]
     ft_b = np.round(net.ft_bias.detach().cpu().numpy() * QA).astype(np.int16)           # [H]
     out_w = np.round(net.out.weight.detach().cpu().numpy() * QB).astype(np.int16)       # [B, 2H]
     out_b = [int(round(float(x) * QA * QB)) for x in net.out.bias.detach().cpu()]       # [B]
@@ -102,6 +129,7 @@ def main():
     ap.add_argument("--hidden", type=int, default=256)
     ap.add_argument("--buckets", type=int, default=1, help="output buckets by piece count (1 or 8)")
     ap.add_argument("--king-layout", type=int, default=0, help="0 = no king buckets, 1 = 4 mirrored king buckets")
+    ap.add_argument("--factorize", action="store_true", help="train king buckets with a shared factoriser")
     ap.add_argument("--batch", type=int, default=16384)
     ap.add_argument("--lr", type=float, default=1e-3)
     ap.add_argument("--limit", type=int, default=0)
@@ -122,7 +150,7 @@ def main():
     val_idx, train_idx = perm[:n_val], perm[n_val:]
     print(f"{len(train_idx)} training / {n_val} validation positions", flush=True)
 
-    net = Net(a.hidden, a.buckets, a.king_layout).to(dev)
+    net = Net(a.hidden, a.buckets, a.king_layout, a.factorize).to(dev)
     opt = torch.optim.Adam(net.parameters(), lr=a.lr)
     sched = torch.optim.lr_scheduler.StepLR(opt, step_size=max(1, a.epochs // 3), gamma=0.3)
 
@@ -156,9 +184,7 @@ def main():
             opt.zero_grad()
             loss.backward()
             opt.step()
-            with torch.no_grad():
-                net.ft.weight.clamp_(-WEIGHT_CLIP, WEIGHT_CLIP)
-                net.out.weight.clamp_(-WEIGHT_CLIP, WEIGHT_CLIP)
+            net.clip()
             tot, nb = tot + loss.detach(), nb + 1
         sched.step()
         history.append({"epoch": epoch + 1, "train_loss": tot.item() / nb, "val_loss": val_loss(),
@@ -167,7 +193,7 @@ def main():
         export(net, a.out, a.hidden)
 
     Path(a.out).with_suffix(".json").write_text(json.dumps(
-        {"data": a.data, "positions": len(c), "hidden": a.hidden, "buckets": a.buckets, "king_layout": a.king_layout, "epochs": a.epochs, "batch": a.batch, "lr": a.lr, "wdl": a.wdl,
+        {"data": a.data, "positions": len(c), "hidden": a.hidden, "buckets": a.buckets, "king_layout": a.king_layout, "factorize": a.factorize, "epochs": a.epochs, "batch": a.batch, "lr": a.lr, "wdl": a.wdl,
          "scale": SCALE, "qa": QA, "qb": QB, "history": history}, indent=1))
 
 
