@@ -1,0 +1,139 @@
+{
+ "data": "/tmp/sp0,/tmp/sp1,/tmp/sp2,/tmp/sp3,/tmp/sp4,/tmp/sp5,/tmp/sp6,/tmp/sp7,/tmp/sp8,/tmp/sp9,/tmp/sp10,/tmp/sp11,/tmp/sp12,/tmp/sp13,/tmp/sp14,/tmp/sp15,/kaggle/input/notebooks/abhaychaudhary01/tsurugi-lichess-shards/shards",
+ "positions": 482739856,
+ "hidden": 1536,
+ "buckets": 8,
+ "king_layout": 0,
+ "factorize": false,
+ "epochs": 20,
+ "batch": 16384,
+ "lr": 0.001,
+ "wdl": 0.25,
+ "trainer": "jax",
+ "devices": 8,
+ "scale": 400.0,
+ "qa": 255,
+ "qb": 64,
+ "history": [
+  {
+   "epoch": 1,
+   "train_loss": 0.006073545664548874,
+   "val_loss": 0.0056568568245095084,
+   "seconds": 582
+  },
+  {
+   "epoch": 2,
+   "train_loss": 0.005555374547839165,
+   "val_loss": 0.005492316734469504,
+   "seconds": 260
+  },
+  {
+   "epoch": 3,
+   "train_loss": 0.005440463311970234,
+   "val_loss": 0.005422306671605804,
+   "seconds": 259
+  },
+  {
+   "epoch": 4,
+   "train_loss": 0.005380034912377596,
+   "val_loss": 0.005369007277519067,
+   "seconds": 260
+  },
+  {
+   "epoch": 5,
+   "train_loss": 0.005340746603906155,
+   "val_loss": 0.005348365974465483,
+   "seconds": 260
+  },
+  {
+   "epoch": 6,
+   "train_loss": 0.0053131538443267345,
+   "val_loss": 0.005328381820684631,
+   "seconds": 259
+  },
+  {
+   "epoch": 7,
+   "train_loss": 0.005162372719496489,
+   "val_loss": 0.005189302197937396,
+   "seconds": 259
+  },
+  {
+   "epoch": 8,
+   "train_loss": 0.0051391771994531155,
+   "val_loss": 0.005182047488392411,
+   "seconds": 259
+  },
+  {
+   "epoch": 9,
+   "train_loss": 0.005130263045430183,
+   "val_loss": 0.005176227579307576,
+   "seconds": 260
+  },
+  {
+   "epoch": 10,
+   "train_loss": 0.00512347836047411,
+   "val_loss": 0.005168643305694814,
+   "seconds": 260
+  },
+  {
+   "epoch": 11,
+   "train_loss": 0.005118172150105238,
+   "val_loss": 0.005164390905002837,
+   "seconds": 260
+  },
+  {
+   "epoch": 12,
+   "train_loss": 0.005113512743264437,
+   "val_loss": 0.005160605480360003,
+   "seconds": 260
+  },
+  {
+   "epoch": 13,
+   "train_loss": 0.005064098630100489,
+   "val_loss": 0.005124191509271974,
+   "seconds": 260
+  },
+  {
+   "epoch": 14,
+   "train_loss": 0.005057787522673607,
+   "val_loss": 0.005121984871670426,
+   "seconds": 259
+  },
+  {
+   "epoch": 15,
+   "train_loss": 0.005055462010204792,
+   "val_loss": 0.00512034158777376,
+   "seconds": 260
+  },
+  {
+   "epoch": 16,
+   "train_loss": 0.0050536757335066795,
+   "val_loss": 0.0051198275411953745,
+   "seconds": 260
+  },
+  {
+   "epoch": 17,
+   "train_loss": 0.005052085034549236,
+   "val_loss": 0.005117975159568779,
+   "seconds": 260
+  },
+  {
+   "epoch": 18,
+   "train_loss": 0.005050634499639273,
+   "val_loss": 0.0051164530242946635,
+   "seconds": 260
+  },
+  {
+   "epoch": 19,
+   "train_loss": 0.005033488385379314,
+   "val_loss": 0.00510777410907206,
+   "seconds": 259
+  },
+  {
+   "epoch": 20,
+   "train_loss": 0.005031784530729055,
+   "val_loss": 0.005107444779020821,
+   "seconds": 260
+  }
+ ]
+}

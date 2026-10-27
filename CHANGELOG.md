@@ -20,8 +20,10 @@ All strength figures are SPRT results against the previous version (fastchess, U
 - Network v7 (768 → 2×1536 → 1): the first network trained partly on Tsurugi's own games — 72M
   self-play positions (20k-node searches by v4/v5, targets blended 25% with the game result) plus 150M Lichess
   positions, 14 epochs. +27.2 ± 7.5 over v6 (3200 games, 8+0.08).
-- Network v8 (768 → 2×1536 → 8 output buckets chosen by piece count) is the default: v7's self-play and Lichess
+- Network v8 (768 → 2×1536 → 8 output buckets chosen by piece count): v7's self-play and Lichess
   data mix (210M positions, 14 epochs), trained on a Kaggle TPU. +8.4 ± 5.3 over v7 (6400 games, 8+0.08).
+- Network v9 (768 → 2×1536 → 8 output buckets) is the default: every self-play game generated so far plus all
+  250M Lichess positions (483M positions, 20 epochs), trained on a Kaggle TPU. +66.2 ± 7.7 over v8 (3200 games, 8+0.08).
 - Hand-crafted evaluation terms (used without a network): mobility +77.8 ± 21.3, rook on open and semi-open files
   +37.6 ± 15.0, king safety +18.1 ± 10.0. Passed pawns (−18.8 ± 11.8) was rejected. Pawn structure failed on top
   of five terms (−7.3 ± 7.9) but passed a 12800-game retest on top of nine (+5.8 ± 4.6, 8+0.08); it stays off by

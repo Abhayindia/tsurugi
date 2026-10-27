@@ -14,7 +14,7 @@ on:
       pairs: {description: "game pairs per shard", default: "100"}
       tc: {description: "time control", default: "10+0.1"}
       seed_offset: {description: "added to the shard number to seed the opening order", default: "0"}
-      net: {description: "network in the repo placed next to the binary (empty for none)", default: "nets/tsurugi-v8.nnue"}
+      net: {description: "network in the repo placed next to the binary (empty for none)", default: "nets/tsurugi-v9.nnue"}
 
 jobs:
   play:
