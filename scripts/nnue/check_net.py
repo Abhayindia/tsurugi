@@ -41,7 +41,7 @@ def load(path):
     if version == 3:
         aux_w = np.frombuffer(raw, np.int16, B * 2 * H, o).reshape(B, 2 * H).astype(np.int64); o += B * 2 * H * 2
         aux_b = struct.unpack_from(f"<{B}i", raw, o); o += B * 4
-        aux = (aux_w, aux_b, struct.unpack_from("<i", raw, o)[0])
+        aux = (aux_w, aux_b, struct.unpack_from("<i", raw, o)[0]); o += 4
     assert o == len(raw), "trailing or missing bytes"
     return ft_w, ft_b, out_w, out_b, H, aux, layout, act
 
