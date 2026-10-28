@@ -62,16 +62,16 @@ the previous version; the full record is in [docs/elo_history.md](docs/elo_histo
 
 Gains are measured against the version before each change, so they are not additive.
 
-**Rating:** about **3400** on the CCRL scale with network v9, from 600-game matches at 10+0.1 (one thread each,
-UHO openings):
+**Rating:** **3398 ± 17** on the CCRL scale with network v9 (inverse-variance mean of the two matches below, 95%
+interval from match statistics only), from 600-game matches at 10+0.1 (one thread each, UHO openings):
 
 | Opponent (CCRL 40/15) | Score | Elo difference | Implied rating |
 |---|---|---|---|
 | Halogen 16 (3625) | 20.8% | −233 [−259, −209] | 3392 |
 | Koivisto 9.0 (3560) | 28.9% | −156 [−180, −134] | 3404 |
 
-Network v8 scored 3355 and 3331 against the same opponents. The anchors are 4-CPU rating-list entries and the
-matches are faster than the list's time control, so this is an estimate rather than a rating-list figure.
+Network v8 scored 3355 and 3331 against the same opponents (2026-10-26). The anchors are CCRL 40/15 4-CPU entries
+(list of 2026-10-16) while both engines played on one thread at 10+0.1.
 
 Earlier, on Stockfish's `UCI_Elo` scale (1200 games at 10+0.1 against Stockfish 17.1 limited to 2850, 3000 and
 3190): 3174 ± 18 with network v7, 3157 ± 19 with v6, 3123 ± 18 with v5, 3066 ± 18 with v4, 3030 ± 19 with v3 and

@@ -60,11 +60,11 @@ All strength figures are SPRT results against the previous version (fastchess, U
 - Removed the code and UCI options of 19 techniques that SPRT rejected (IIR, IIRCut, CaptHistory, LmrTerms,
   LmrHistory, UncPrune, UncLMR, UncPrune2, UncLMR2, Cuckoo, ContCorr, PawnHistory, EvalDropHist, HistPrune,
   QsFutility, LmrDeeper, TTEval, EvalPawnStructure, EvalPassedPawns); node counts are unchanged.
-- AVX2 kernel for the network output and single-pass accumulator updates: the same search in roughly half the
-  CPU time with the 1024-neuron network (identical evaluations and node counts). Actions builds now use the
-  runner's native instruction set.
-- Lazy accumulator updates: a move's network inputs are applied only when that position is evaluated, about 15%
-  more nodes per second with identical node counts.
+- AVX2 kernel for the network output and single-pass accumulator updates (identical evaluations and node
+  counts). Actions builds now use the runner's native instruction set. Native builds run `bench 11` at 950,765
+  nps against 282,859 for a portable build (3.36×, median of 3, network v9, 2026-10-28).
+- Lazy accumulator updates: a move's network inputs are applied only when that position is evaluated; +16.7%
+  nodes per second (mean of 7 alternating `bench 11` pairs, 658k vs 564k nps) with identical node counts.
 - Fixed: a `stop` that arrived before the search thread started was lost, so the engine could search forever
   and ignore later commands (seen under heavy CPU load).
 - Time management scales with the time control and never starts an iteration it cannot finish.
