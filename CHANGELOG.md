@@ -71,8 +71,8 @@ All strength figures are SPRT results against the previous version (fastchess, U
 - Lazy SMP: `Threads` up to 256. Helper threads run the same iterative deepening on a shared transposition table;
   the main thread manages time and reports summed node counts. With one thread the search is unchanged (identical
   node counts).
-- Removed the code and UCI options of 20 techniques that SPRT rejected (IIR, IIRCut, CaptHistory, LmrTerms,
-  LmrHistory, UncPrune, UncLMR, UncPrune2, UncLMR2, UncAsp, Cuckoo, ContCorr, PawnHistory, EvalDropHist, HistPrune,
+- Removed the code and UCI options of 21 techniques that SPRT rejected (IIR, IIRCut, CaptHistory, LmrTerms,
+  LmrHistory, UncPrune, UncLMR, UncPrune2, UncLMR2, UncAsp, UncCorr, Cuckoo, ContCorr, PawnHistory, EvalDropHist, HistPrune,
   QsFutility, LmrDeeper, TTEval, EvalPawnStructure, EvalPassedPawns); node counts are unchanged.
 - AVX2 kernel for the network output and single-pass accumulator updates (identical evaluations and node
   counts). Actions builds now use the runner's native instruction set. Native builds run `bench 11` at 950,765

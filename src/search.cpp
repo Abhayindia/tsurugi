@@ -590,11 +590,6 @@ Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int p
         (best_move == NO_MOVE || (!is_capture(best_move) && !is_promotion(best_move))) &&
         !(b == BOUND_LOWER && best <= eval) && !(b == BOUND_UPPER && best >= eval)) {
         int w = std::min(depth + 1, 16);
-        // Trust the search result more where the network expects its own evaluation to be off.
-        if (Features.unc_corr && Position::nnue_enabled && nnue::has_uncertainty()) {
-            int u = nnue::uncertainty(pos.accumulator(), pos.side_to_move(), popcount(pos.pieces()));
-            w = std::clamp(w * u / 74, std::max(1, w / 2), 2 * w);
-        }
         auto update = [&](int& e) {
             e = std::clamp((e * (256 - w) + (best - eval) * 256 * w) / 256, -96 * 256, 96 * 256);
         };
