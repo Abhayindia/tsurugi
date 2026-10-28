@@ -68,6 +68,10 @@ All strength figures are SPRT results against the previous version (fastchess, U
 - Time budget scaled by the network's uncertainty about the root position (active only with a network that has an uncertainty head) +4.8 ± 3.3 (12800 games, 8+0.08).
 
 ### Engine
+- Refresh cache ("Finny table") for king-bucket networks: a king that changes its input bucket rebuilds its
+  accumulator from the cached one of the last board seen in that bucket, applying only the squares that differ.
+  Node counts are unchanged; `bench 9` with a king-bucket network runs at 685,280 nps against 593,482 before
+  (+15.47%, median of 7 alternating runs, faster in all 7 pairs). Networks without king buckets are unaffected.
 - Lazy SMP: `Threads` up to 256. Helper threads run the same iterative deepening on a shared transposition table;
   the main thread manages time and reports summed node counts. With one thread the search is unchanged (identical
   node counts).
