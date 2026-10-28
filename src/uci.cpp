@@ -40,7 +40,7 @@ const Toggle TOGGLES[] = {
     {"CutNode", &Features.cut_node},         {"ProbCut", &Features.probcut},
     {"SingularV2", &Features.singular_v2},   {"TTPV", &Features.tt_pv},
     {"UncTM", &Features.unc_tm},             {"ThreatHistory", &Features.threat_history},
-    {"CaptHistSEE", &Features.capt_hist_see}, {"UncAsp", &Features.unc_asp},
+    {"CaptHistSEE", &Features.capt_hist_see},
     {"EvalMobility", &EvalTerms.mobility},   {"EvalPassedPawns2", &EvalTerms.passed_pawns2},
     {"EvalKingSafety", &EvalTerms.king_safety},
     {"EvalRookFiles", &EvalTerms.rook_files},

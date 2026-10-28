@@ -622,12 +622,9 @@ SearchResult Searcher::search(Position& pos, const SearchLimits& limits, bool ve
     int stability = 0;
     // How unsure the network is about the root position: unclear positions get more time, clear ones less.
     double unc_f = 1.0;
-    int asp_delta = 20;
-    if ((Features.unc_tm || Features.unc_asp) && Position::nnue_enabled && nnue::has_uncertainty() && !pos.in_check()) {
+    if (Features.unc_tm && Position::nnue_enabled && nnue::has_uncertainty() && !pos.in_check()) {
         int u = nnue::uncertainty(pos.accumulator(), pos.side_to_move(), popcount(pos.pieces()));
-        if (Features.unc_tm) unc_f = std::clamp(1.0 + (u - 75) / 250.0, 0.85, 1.25);
-        // Aspiration window sized to the network's uncertainty: about 20 at the average uncertainty.
-        if (Features.unc_asp) asp_delta = std::clamp(8 + u / 6, 12, 40);
+        unc_f = std::clamp(1.0 + (u - 75) / 250.0, 0.85, 1.25);
     }
 
     SearchResult result;
@@ -642,7 +639,7 @@ SearchResult Searcher::search(Position& pos, const SearchLimits& limits, bool ve
         root_best_ = NO_MOVE;
         Value v;
         if (Features.aspiration && depth >= 4) {
-            int delta = asp_delta;
+            int delta = 20;
             Value a = std::max(prev - delta, -VALUE_INFINITE), b = std::min(prev + delta, VALUE_INFINITE);
             for (;;) {
                 v = negamax(pos, a, b, depth, 0, false);

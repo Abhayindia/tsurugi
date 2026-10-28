@@ -41,7 +41,6 @@ struct SearchFeatures {
     bool singular_v2 = true;
     bool tt_pv = true;
     bool unc_tm = true;
-    bool unc_asp = false;
     bool threat_history = true;
     bool capt_hist_see = true;
 };
