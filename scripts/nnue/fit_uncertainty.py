@@ -4,7 +4,8 @@ own evaluation is from the training target in this position.
 Usage: python scripts/nnue/fit_uncertainty.py --net nets/tsurugi-v6.nnue --data <shards> --out <net.nnue>
        [--positions 5000000] [--ridge 1.0]
 
-The network's weights are left untouched, so its evaluation is unchanged; the output file (format version 3) appends
+The network's weights are left untouched, so its evaluation is unchanged; the output file (format version 3, or 6
+for networks of version 4 and later) appends
   i16 aux_w[B][2H] | i32 aux_b[B] | i32 aux_q
 and the engine computes the predicted error in centipawns as (dot(clamped hidden, aux_w[b]) + aux_b[b]) / aux_q,
 using the same clipped-ReLU activations and output bucket as the evaluation. Because the activations are fixed,
@@ -29,12 +30,22 @@ def read_net(path):
     assert raw[:4] == b"TSRG"
     version, hidden = struct.unpack_from("<II", raw, 4)
     buckets, o = (struct.unpack_from("<I", raw, 12)[0], 16) if version >= 2 else (1, 12)
+    layout = act = has_aux = 0
+    if version >= 4:
+        layout = struct.unpack_from("<I", raw, o)[0]; o += 4
+    if version >= 5:
+        act = struct.unpack_from("<I", raw, o)[0]; o += 4
+    if version == 6:
+        has_aux = struct.unpack_from("<I", raw, o)[0]; o += 4
+    assert version != 3 and not has_aux, "the network already has an uncertainty head"
+    assert layout == 0, "king-bucket networks are not supported"
     start = o
     ft_w = np.frombuffer(raw, np.int16, 768 * hidden, o).reshape(768, hidden); o += 768 * hidden * 2
     ft_b = np.frombuffer(raw, np.int16, hidden, o); o += hidden * 2
     out_w = np.frombuffer(raw, np.int16, buckets * 2 * hidden, o).reshape(buckets, 2 * hidden); o += buckets * 4 * hidden
     out_b = np.array(struct.unpack_from(f"<{buckets}i", raw, o), dtype=np.int64); o += buckets * 4
-    return dict(hidden=hidden, buckets=buckets, ft_w=ft_w, ft_b=ft_b, out_w=out_w, out_b=out_b, body=raw[start:o])
+    return dict(version=version, act=act, hidden=hidden, buckets=buckets, ft_w=ft_w, ft_b=ft_b, out_w=out_w,
+                out_b=out_b, body=raw[start:o])
 
 
 def black_view(f):
@@ -63,8 +74,12 @@ def activations(net, feats, stm):
     bucket = torch.clamp((pieces - 2) * B // 32, 0, B - 1) if B > 1 else torch.zeros_like(pieces)
     out_w = torch.from_numpy(net["out_w"].astype(np.int64))
     out_b = torch.from_numpy(net["out_b"])
-    raw = (x.long() * out_w[bucket]).sum(1) + out_b[bucket]
-    cp = torch.trunc(raw.double() * SCALE / (QA * QB))
+    if net["act"] == 1:
+        raw = (x.long() * x.long() * out_w[bucket]).sum(1) + out_b[bucket] * QA
+        cp = torch.trunc(raw.double() * SCALE / (QA * QA * QB))
+    else:
+        raw = (x.long() * out_w[bucket]).sum(1) + out_b[bucket]
+        cp = torch.trunc(raw.double() * SCALE / (QA * QB))
     return x, bucket, cp
 
 
@@ -131,7 +146,10 @@ def main():
 
     with open(a.out, "wb") as fh:
         fh.write(b"TSRG")
-        fh.write(struct.pack("<III", 3, net["hidden"], B))
+        if net["version"] <= 2:
+            fh.write(struct.pack("<III", 3, net["hidden"], B))
+        else:
+            fh.write(struct.pack("<IIIIII", 6, net["hidden"], B, 0, net["act"], 1))
         fh.write(net["body"])
         fh.write(aux_w.tobytes())
         fh.write(struct.pack(f"<{B}i", *aux_b.tolist()))

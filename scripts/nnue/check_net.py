@@ -28,17 +28,20 @@ def load(path):
     version, H = struct.unpack_from("<II", raw, 4)
     B, o = (struct.unpack_from("<I", raw, 12)[0], 16) if version >= 2 else (1, 12)
     layout = act = 0
+    has_aux = version == 3
     if version >= 4:
         layout = struct.unpack_from("<I", raw, o)[0]; o += 4
-    if version == 5:
+    if version >= 5:
         act = struct.unpack_from("<I", raw, o)[0]; o += 4
+    if version == 6:
+        has_aux = struct.unpack_from("<I", raw, o)[0] == 1; o += 4
     rows = 768 * (4 if layout == 1 else 1)
     ft_w = np.frombuffer(raw, np.int16, rows * H, o).reshape(rows, H).astype(np.int64); o += rows * H * 2
     ft_b = np.frombuffer(raw, np.int16, H, o).astype(np.int64); o += H * 2
     out_w = np.frombuffer(raw, np.int16, B * 2 * H, o).reshape(B, 2 * H).astype(np.int64); o += B * 2 * H * 2
     out_b = struct.unpack_from(f"<{B}i", raw, o); o += B * 4
     aux = None
-    if version == 3:
+    if has_aux:
         aux_w = np.frombuffer(raw, np.int16, B * 2 * H, o).reshape(B, 2 * H).astype(np.int64); o += B * 2 * H * 2
         aux_b = struct.unpack_from(f"<{B}i", raw, o); o += B * 4
         aux = (aux_w, aux_b, struct.unpack_from("<i", raw, o)[0]); o += 4
@@ -73,18 +76,17 @@ def reference(net, board):
     us, them = acc[board.turn], acc[not board.turn]
     B = len(out_b)
     k = min(max((len(board.piece_map()) - 2) * B // 32, 0), B - 1)
-    if act == 1:
-        u, t = np.clip(us, 0, QA), np.clip(them, 0, QA)
-        s = int(np.dot(u * u, out_w[k][:H]) + np.dot(t * t, out_w[k][H:]))
-        return tdiv((s + out_b[k] * QA) * SCALE, QA * QA * QB), None
-    s = int(np.dot(np.clip(us, 0, QA), out_w[k][:H]) + np.dot(np.clip(them, 0, QA), out_w[k][H:]))
-    v = (s + out_b[k]) * SCALE
     unc = None
     if aux:
         aux_w, aux_b, q = aux
         u = int(np.dot(np.clip(us, 0, QA), aux_w[k][:H]) + np.dot(np.clip(them, 0, QA), aux_w[k][H:]))
-        unc = max(0, int((u + aux_b[k]) / q))
-    return int(v / (QA * QB)), unc  # C++ integer division truncates toward zero
+        unc = max(0, tdiv(u + aux_b[k], q))
+    if act == 1:
+        u, t = np.clip(us, 0, QA), np.clip(them, 0, QA)
+        s = int(np.dot(u * u, out_w[k][:H]) + np.dot(t * t, out_w[k][H:]))
+        return tdiv((s + out_b[k] * QA) * SCALE, QA * QA * QB), unc
+    s = int(np.dot(np.clip(us, 0, QA), out_w[k][:H]) + np.dot(np.clip(them, 0, QA), out_w[k][H:]))
+    return tdiv((s + out_b[k]) * SCALE, QA * QB), unc
 
 
 # Positions reached by playing moves, so the engine's incremental (and lazy) accumulator updates are checked too:

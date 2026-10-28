@@ -17,6 +17,8 @@ namespace tsurugi::nnue {
 //              | i16 out_w[B][2H] | i32 out_b[B], where K is the number of king buckets of the layout.
 //   version 5: version 4 with a u32 activation after king_layout: 0 = clipped ReLU, 1 = SCReLU (clamp(acc, 0, QA)^2,
 //              output scaled by SCALE/(QA*QA*QB) and the bias by an extra QA).
+//   version 6: version 5 with a u32 aux flag after the activation; if it is 1 the file ends with version 3's
+//              uncertainty head (computed on clamp(acc, 0, QA) whatever the activation).
 // King layouts: 0 = none (K = 1); 1 = each side sees its king on files a-d (the board is mirrored otherwise) and the
 // king square picks one of K = 4 buckets: a1/b1, c1/d1, the second rank, the third rank and beyond.
 // Inputs: 768 piece-square features per perspective; hidden = clamp(acc, 0, QA); output scaled by SCALE/(QA*QB).

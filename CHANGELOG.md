@@ -6,6 +6,8 @@ All strength figures are SPRT results against the previous version (fastchess, U
 ## Unreleased
 
 ### Evaluation
+- Network format version 6: version 5 plus an optional uncertainty head, so SCReLU networks can carry one
+  (fit_uncertainty.py writes it; check_net verifies evaluation and uncertainty exactly).
 - Network format version 5 adds the SCReLU activation (`--screlu` in both trainers). The engine sums in int32
   when every bucket's worst case fits and in int64 otherwise; check_net verifies both paths exactly.
 - NNUE evaluation (768 → 2×256 → 1, clipped ReLU, int16, incremental accumulators), on by default.

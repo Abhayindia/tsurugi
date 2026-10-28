@@ -45,12 +45,13 @@ bool load(const std::string& path) {
     in.read(magic, 4);
     in.read(reinterpret_cast<char*>(&version), 4);
     in.read(reinterpret_cast<char*>(&hidden), 4);
-    if (!in || std::memcmp(magic, "TSRG", 4) != 0 || (version < 1 || version > 5) || hidden != HIDDEN) return false;
-    std::uint32_t buckets = 1, layout = 0, activation = 0;
+    if (!in || std::memcmp(magic, "TSRG", 4) != 0 || (version < 1 || version > 6) || hidden != HIDDEN) return false;
+    std::uint32_t buckets = 1, layout = 0, activation = 0, aux = version == 3;
     if (version >= 2) in.read(reinterpret_cast<char*>(&buckets), 4);
     if (version >= 4) in.read(reinterpret_cast<char*>(&layout), 4);
-    if (version == 5) in.read(reinterpret_cast<char*>(&activation), 4);
-    if (!in || buckets < 1 || buckets > MAX_BUCKETS || layout > 1 || activation > 1) return false;
+    if (version >= 5) in.read(reinterpret_cast<char*>(&activation), 4);
+    if (version == 6) in.read(reinterpret_cast<char*>(&aux), 4);
+    if (!in || buckets < 1 || buckets > MAX_BUCKETS || layout > 1 || activation > 1 || aux > 1) return false;
     int king_buckets = layout == 1 ? 4 : 1;
     auto tmp = std::make_unique<Network>();
     tmp->buckets = int(buckets);
@@ -59,7 +60,7 @@ bool load(const std::string& path) {
     in.read(reinterpret_cast<char*>(tmp->ft_b), sizeof(tmp->ft_b));
     for (std::uint32_t b = 0; b < buckets; ++b) in.read(reinterpret_cast<char*>(tmp->out_w[b]), sizeof(tmp->out_w[b]));
     in.read(reinterpret_cast<char*>(tmp->out_b), std::streamsize(sizeof(std::int32_t) * buckets));
-    tmp->has_aux = version == 3;
+    tmp->has_aux = aux == 1;
     if (tmp->has_aux) {
         for (std::uint32_t b = 0; b < buckets; ++b) in.read(reinterpret_cast<char*>(tmp->aux_w[b]), sizeof(tmp->aux_w[b]));
         in.read(reinterpret_cast<char*>(tmp->aux_b), std::streamsize(sizeof(std::int32_t) * buckets));
