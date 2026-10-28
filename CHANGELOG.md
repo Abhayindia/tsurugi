@@ -6,6 +6,8 @@ All strength figures are SPRT results against the previous version (fastchess, U
 ## Unreleased
 
 ### Evaluation
+- Network format version 5 adds the SCReLU activation (`--screlu` in both trainers). The engine sums in int32
+  when every bucket's worst case fits and in int64 otherwise; check_net verifies both paths exactly.
 - NNUE evaluation (768 → 2×256 → 1, clipped ReLU, int16, incremental accumulators), on by default.
   Network v1 (30M Lichess positions): +241.6 ± 36.9 over the hand-crafted evaluation (444 games).
 - Network v2 (60M positions, 20 epochs, trained on a Kaggle GPU): +97.1 ± 13.4 over v1 (1600 games).

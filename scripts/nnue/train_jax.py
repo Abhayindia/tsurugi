@@ -78,26 +78,30 @@ def accumulate(p, idx, pad):
     return acc
 
 
-def forward(p, feats, stm, buckets, layout=0):
+def forward(p, feats, stm, buckets, layout=0, screlu=False):
     pad = 768 * KING_BUCKETS[layout]
     white, black = views(feats, layout)
     w = accumulate(p, white, pad)
     b = accumulate(p, black, pad)
     s = (stm == 1)[:, None]
     x = jnp.clip(jnp.concatenate([jnp.where(s, b, w), jnp.where(s, w, b)], 1), 0.0, 1.0)
+    if screlu:
+        x = x * x
     pieces = (white != pad).sum(1)
     k = jnp.clip((pieces - 2) * buckets // 32, 0, buckets - 1) if buckets > 1 else jnp.zeros_like(pieces)
     return (x * p["out_w"][k]).sum(1) + p["out_b"][k]
 
 
-def export(p, path, hidden, buckets, layout=0):
+def export(p, path, hidden, buckets, layout=0, screlu=False):
     ft_w = np.round(np.asarray(merged_ft(p, layout)) * QA).astype(np.int16)
     ft_b = np.round(np.asarray(p["ft_b"]) * QA).astype(np.int16)
     out_w = np.round(np.asarray(p["out_w"]) * QB).astype(np.int16)
     out_b = [int(round(float(x) * QA * QB)) for x in np.asarray(p["out_b"])]
     with open(path, "wb") as fh:
         fh.write(b"TSRG")
-        if layout:
+        if screlu:
+            fh.write(struct.pack("<IIIII", 5, hidden, buckets, layout, 1))
+        elif layout:
             fh.write(struct.pack("<IIII", 4, hidden, buckets, layout))
         else:
             fh.write(struct.pack("<II", 1, hidden) if buckets == 1 else struct.pack("<III", 2, hidden, buckets))
@@ -116,6 +120,7 @@ def main():
     ap.add_argument("--buckets", type=int, default=1)
     ap.add_argument("--king-layout", type=int, default=0, help="0 = no king buckets, 1 = 4 mirrored king buckets")
     ap.add_argument("--factorize", action="store_true", help="train king buckets with a shared factoriser")
+    ap.add_argument("--screlu", action="store_true", help="squared clipped ReLU activation (network format version 5)")
     ap.add_argument("--batch", type=int, default=16384)
     ap.add_argument("--lr", type=float, default=1e-3)
     ap.add_argument("--limit", type=int, default=0)
@@ -147,7 +152,7 @@ def main():
     opt_state = jax.device_put(opt.init(params), repl)
 
     def loss_fn(p, feats, stm, tgt):
-        return jnp.mean((jax.nn.sigmoid(forward(p, feats, stm, a.buckets, a.king_layout)) - tgt) ** 2)
+        return jnp.mean((jax.nn.sigmoid(forward(p, feats, stm, a.buckets, a.king_layout, a.screlu)) - tgt) ** 2)
 
     @jax.jit
     def step(p, st, feats, stm, tgt):
@@ -184,10 +189,10 @@ def main():
         history.append({"epoch": epoch + 1, "train_loss": float(jnp.mean(jnp.stack(losses))), "val_loss": val,
                         "seconds": round(time.time() - t0)})
         print(json.dumps(history[-1]), flush=True)
-        export(jax.device_get(params), a.out, a.hidden, a.buckets, a.king_layout)
+        export(jax.device_get(params), a.out, a.hidden, a.buckets, a.king_layout, a.screlu)
 
     Path(a.out).with_suffix(".json").write_text(json.dumps(
-        {"data": a.data, "positions": len(c), "hidden": a.hidden, "buckets": a.buckets, "king_layout": a.king_layout, "factorize": a.factorize, "epochs": a.epochs,
+        {"data": a.data, "positions": len(c), "hidden": a.hidden, "buckets": a.buckets, "king_layout": a.king_layout, "factorize": a.factorize, "screlu": a.screlu, "epochs": a.epochs,
          "batch": batch, "lr": a.lr, "wdl": a.wdl, "trainer": "jax", "devices": len(devices),
          "scale": SCALE, "qa": QA, "qb": QB, "history": history}, indent=1))
 

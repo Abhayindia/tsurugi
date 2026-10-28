@@ -1,6 +1,8 @@
 #include "nnue.h"
 
 #include <algorithm>
+#include <cstdint>
+#include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <memory>
@@ -23,6 +25,8 @@ struct Network {
     std::int32_t aux_q;
     int buckets;
     bool has_aux;
+    bool screlu;
+    bool screlu_fast;  // every bucket's worst-case SCReLU sum fits in int32
 };
 
 Network net;
@@ -41,14 +45,16 @@ bool load(const std::string& path) {
     in.read(magic, 4);
     in.read(reinterpret_cast<char*>(&version), 4);
     in.read(reinterpret_cast<char*>(&hidden), 4);
-    if (!in || std::memcmp(magic, "TSRG", 4) != 0 || (version < 1 || version > 4) || hidden != HIDDEN) return false;
-    std::uint32_t buckets = 1, layout = 0;
+    if (!in || std::memcmp(magic, "TSRG", 4) != 0 || (version < 1 || version > 5) || hidden != HIDDEN) return false;
+    std::uint32_t buckets = 1, layout = 0, activation = 0;
     if (version >= 2) in.read(reinterpret_cast<char*>(&buckets), 4);
-    if (version == 4) in.read(reinterpret_cast<char*>(&layout), 4);
-    if (!in || buckets < 1 || buckets > MAX_BUCKETS || layout > 1) return false;
+    if (version >= 4) in.read(reinterpret_cast<char*>(&layout), 4);
+    if (version == 5) in.read(reinterpret_cast<char*>(&activation), 4);
+    if (!in || buckets < 1 || buckets > MAX_BUCKETS || layout > 1 || activation > 1) return false;
     int king_buckets = layout == 1 ? 4 : 1;
     auto tmp = std::make_unique<Network>();
     tmp->buckets = int(buckets);
+    tmp->screlu = activation == 1;
     in.read(reinterpret_cast<char*>(tmp->ft_w), std::streamsize(sizeof(std::int16_t) * 768 * king_buckets * HIDDEN));
     in.read(reinterpret_cast<char*>(tmp->ft_b), sizeof(tmp->ft_b));
     for (std::uint32_t b = 0; b < buckets; ++b) in.read(reinterpret_cast<char*>(tmp->out_w[b]), sizeof(tmp->out_w[b]));
@@ -61,6 +67,12 @@ bool load(const std::string& path) {
         if (tmp->aux_q <= 0) return false;
     }
     if (!in || in.peek() != std::char_traits<char>::eof()) return false;
+    tmp->screlu_fast = true;
+    for (std::uint32_t b = 0; b < buckets; ++b) {
+        std::int64_t bound = 0;
+        for (int i = 0; i < 2 * HIDDEN; ++i) bound += std::int64_t(QA) * QA * std::abs(int(tmp->out_w[b][i]));
+        if (bound > INT32_MAX) tmp->screlu_fast = false;
+    }
     net = *tmp;
     king_layout = int(layout);
     is_loaded = true;
@@ -140,12 +152,57 @@ std::int32_t dot(const std::int16_t* us, const std::int16_t* them, const std::in
     return sum;
 }
 
+// sum over neurons of clamp(x, 0, QA)^2 * w; int32 only when load() proved no partial sum can overflow.
+std::int64_t dot_screlu(const std::int16_t* us, const std::int16_t* them, const std::int16_t* w) {
+    if (!net.screlu_fast) {
+        std::int64_t sum = 0;
+        for (int i = 0; i < HIDDEN; ++i) {
+            std::int64_t u = std::clamp<std::int32_t>(us[i], 0, QA), t = std::clamp<std::int32_t>(them[i], 0, QA);
+            sum += u * u * w[i] + t * t * w[HIDDEN + i];
+        }
+        return sum;
+    }
+    std::int32_t sum = 0;
+#if defined(__AVX2__)
+    // x * w fits in int16 (255 * 127), so x * (x * w) is one multiply and one multiply-add per 16 neurons.
+    const __m256i zero = _mm256_setzero_si256(), qa = _mm256_set1_epi16(QA);
+    __m256i acc32 = _mm256_setzero_si256();
+    for (int i = 0; i < HIDDEN; i += 16) {
+        __m256i u = _mm256_load_si256(reinterpret_cast<const __m256i*>(us + i));
+        __m256i t = _mm256_load_si256(reinterpret_cast<const __m256i*>(them + i));
+        u = _mm256_min_epi16(_mm256_max_epi16(u, zero), qa);
+        t = _mm256_min_epi16(_mm256_max_epi16(t, zero), qa);
+        __m256i uw = _mm256_mullo_epi16(u, _mm256_load_si256(reinterpret_cast<const __m256i*>(w + i)));
+        __m256i tw = _mm256_mullo_epi16(t, _mm256_load_si256(reinterpret_cast<const __m256i*>(w + HIDDEN + i)));
+        acc32 = _mm256_add_epi32(acc32, _mm256_madd_epi16(u, uw));
+        acc32 = _mm256_add_epi32(acc32, _mm256_madd_epi16(t, tw));
+    }
+    __m128i s128 = _mm_add_epi32(_mm256_castsi256_si128(acc32), _mm256_extracti128_si256(acc32, 1));
+    s128 = _mm_add_epi32(s128, _mm_shuffle_epi32(s128, 0x4E));
+    s128 = _mm_add_epi32(s128, _mm_shuffle_epi32(s128, 0xB1));
+    sum = _mm_cvtsi128_si32(s128);
+#else
+    for (int i = 0; i < HIDDEN; ++i) {
+        std::int32_t u = std::clamp<std::int32_t>(us[i], 0, QA), t = std::clamp<std::int32_t>(them[i], 0, QA);
+        sum += u * u * w[i] + t * t * w[HIDDEN + i];
+    }
+#endif
+    return sum;
+}
+
 }  // namespace
 
 Value evaluate(const Accumulator& acc, Color stm, int pieces) {
     int bucket = bucket_of(pieces);
-    std::int32_t sum = dot(acc.v[stm], acc.v[~stm], net.out_w[bucket]);
-    std::int64_t v = (std::int64_t(sum) + net.out_b[bucket]) * SCALE / (QA * QB);
+    std::int64_t v;
+    if (net.screlu) {
+        // The squared activation carries an extra factor QA.
+        std::int64_t sum = dot_screlu(acc.v[stm], acc.v[~stm], net.out_w[bucket]);
+        v = (sum + std::int64_t(net.out_b[bucket]) * QA) * SCALE / (std::int64_t(QA) * QA * QB);
+    } else {
+        std::int32_t sum = dot(acc.v[stm], acc.v[~stm], net.out_w[bucket]);
+        v = (std::int64_t(sum) + net.out_b[bucket]) * SCALE / (QA * QB);
+    }
     return Value(std::clamp<std::int64_t>(v, -VALUE_MATE_IN_MAX_PLY + 1, VALUE_MATE_IN_MAX_PLY - 1));
 }
 

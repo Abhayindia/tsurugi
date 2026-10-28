@@ -52,9 +52,9 @@ def views(f, layout=0):
 
 
 class Net(nn.Module):
-    def __init__(self, hidden, buckets=1, layout=0, factorize=False):
+    def __init__(self, hidden, buckets=1, layout=0, factorize=False, screlu=False):
         super().__init__()
-        self.buckets, self.layout = buckets, layout
+        self.buckets, self.layout, self.screlu = buckets, layout, screlu
         self.pad = 768 * KING_BUCKETS[layout]
         self.ft = nn.EmbeddingBag(self.pad + 1, hidden, mode="sum", padding_idx=self.pad)
         self.ft_bias = nn.Parameter(torch.zeros(hidden))
@@ -93,7 +93,8 @@ class Net(nn.Module):
         b = self.inputs(black)
         s = stm.unsqueeze(1).bool()
         us, them = torch.where(s, b, w), torch.where(s, w, b)
-        out = self.out(torch.clamp(torch.cat([us, them], 1), 0, 1))
+        x = torch.clamp(torch.cat([us, them], 1), 0, 1)
+        out = self.out(x * x if self.screlu else x)
         if self.buckets == 1:
             return out.squeeze(1)
         # Same bucket as the engine: the piece count (kings included) split evenly over 2..32.
@@ -109,7 +110,9 @@ def export(net, path, hidden):
     out_b = [int(round(float(x) * QA * QB)) for x in net.out.bias.detach().cpu()]       # [B]
     with open(path, "wb") as fh:
         fh.write(b"TSRG")
-        if net.layout:
+        if net.screlu:
+            fh.write(struct.pack("<IIIII", 5, hidden, net.buckets, net.layout, 1))
+        elif net.layout:
             fh.write(struct.pack("<IIII", 4, hidden, net.buckets, net.layout))
         elif net.buckets == 1:
             fh.write(struct.pack("<II", 1, hidden))
@@ -130,6 +133,7 @@ def main():
     ap.add_argument("--buckets", type=int, default=1, help="output buckets by piece count (1 or 8)")
     ap.add_argument("--king-layout", type=int, default=0, help="0 = no king buckets, 1 = 4 mirrored king buckets")
     ap.add_argument("--factorize", action="store_true", help="train king buckets with a shared factoriser")
+    ap.add_argument("--screlu", action="store_true", help="squared clipped ReLU activation (network format version 5)")
     ap.add_argument("--batch", type=int, default=16384)
     ap.add_argument("--lr", type=float, default=1e-3)
     ap.add_argument("--limit", type=int, default=0)
@@ -150,7 +154,7 @@ def main():
     val_idx, train_idx = perm[:n_val], perm[n_val:]
     print(f"{len(train_idx)} training / {n_val} validation positions", flush=True)
 
-    net = Net(a.hidden, a.buckets, a.king_layout, a.factorize).to(dev)
+    net = Net(a.hidden, a.buckets, a.king_layout, a.factorize, a.screlu).to(dev)
     opt = torch.optim.Adam(net.parameters(), lr=a.lr)
     sched = torch.optim.lr_scheduler.StepLR(opt, step_size=max(1, a.epochs // 3), gamma=0.3)
 
@@ -193,7 +197,7 @@ def main():
         export(net, a.out, a.hidden)
 
     Path(a.out).with_suffix(".json").write_text(json.dumps(
-        {"data": a.data, "positions": len(c), "hidden": a.hidden, "buckets": a.buckets, "king_layout": a.king_layout, "factorize": a.factorize, "epochs": a.epochs, "batch": a.batch, "lr": a.lr, "wdl": a.wdl,
+        {"data": a.data, "positions": len(c), "hidden": a.hidden, "buckets": a.buckets, "king_layout": a.king_layout, "factorize": a.factorize, "screlu": a.screlu, "epochs": a.epochs, "batch": a.batch, "lr": a.lr, "wdl": a.wdl,
          "scale": SCALE, "qa": QA, "qb": QB, "history": history}, indent=1))
 
 
