@@ -117,7 +117,7 @@ portable binary. The default network is copied next to the binary as `tsurugi.nn
 | Option | Default | Description |
 |---|---|---|
 | `Hash` | 16 | Transposition table size in MB (1-4096) |
-| `Threads` | 1 | Search threads (single-threaded for now) |
+| `Threads` | 1 | Search threads (Lazy SMP, 1-256) |
 | `Move Overhead` | 50 | Milliseconds reserved per move for GUI or network latency |
 | `UseNNUE` | true | Use the neural network evaluation |
 | `EvalFile` | `tsurugi.nnue` | Network file to load |
