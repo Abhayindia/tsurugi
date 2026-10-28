@@ -38,7 +38,7 @@ the previous version; the full record is in [docs/elo_history.md](docs/elo_histo
 **Evaluation**
 - NNUE: 768 → 2×1536 → 1 network with 8 output buckets by piece count, clipped-ReLU activations, int16
   quantisation and lazily updated accumulators, trained with Tsurugi's own PyTorch and JAX trainers
-  ([scripts/nnue](scripts/nnue)); network v9 was trained on 483M positions
+  ([scripts/nnue](scripts/nnue)); network v10 is v9 (trained on 483M positions) plus a fitted uncertainty head
 - A hand-crafted tapered evaluation (material, piece-square tables, mobility, king safety, rook files) is used when
   no network is loaded
 
@@ -55,6 +55,7 @@ the previous version; the full record is in [docs/elo_history.md](docs/elo_histo
 | Network v7 over v6 (8+0.08) | +27.2 ± 7.5 |
 | Network v8 over v7 (8+0.08) | +8.4 ± 5.3 |
 | Network v9 over v8 (8+0.08) | +66.2 ± 7.7 |
+| Network v10 (v9 + uncertainty head) over v9 (8+0.08) | +5.5 ± 3.7 |
 | Late move reductions | +144.8 ± 27.7 |
 | Null-move pruning | +137.6 ± 28.1 |
 | Aspiration windows | +78.3 ± 21.7 |
