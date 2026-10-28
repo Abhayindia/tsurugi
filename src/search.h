@@ -4,6 +4,8 @@
 
 #include <atomic>
 #include <cstdint>
+#include <memory>
+#include <thread>
 #include <vector>
 
 namespace tsurugi {
@@ -63,6 +65,8 @@ public:
     // Clears a previous stop. Call it from the thread that issues stops, before starting the search, so a stop
     // that arrives before the search thread runs is never lost.
     void clear_stop() { stop_.store(false, std::memory_order_relaxed); }
+    // Lazy SMP: n - 1 helper searchers share the transposition table; this one keeps time and reports.
+    void set_threads(int n);
     int move_overhead = 50;
 
 private:
@@ -91,8 +95,16 @@ private:
     void setup_time(const Position& pos, const SearchLimits& limits);
     std::int64_t elapsed() const;
 
+    void start_helpers(const Position& pos, const SearchLimits& limits);
+    void stop_helpers();
+    std::uint64_t total_nodes() const;
+
     std::atomic<bool> stop_{false};
     std::uint64_t nodes_ = 0;
+    std::atomic<std::uint64_t> shared_nodes_{0};  // nodes_ as of the last time check, readable by other threads
+    bool helper_ = false;
+    std::vector<std::unique_ptr<Searcher>> helpers_;
+    std::vector<std::thread> helper_threads_;
     std::uint64_t node_limit_ = 0;
     std::int64_t start_ = 0, soft_ = -1, hard_ = -1;
     int seldepth_ = 0;

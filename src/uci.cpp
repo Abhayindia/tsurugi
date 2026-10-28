@@ -76,7 +76,7 @@ public:
                       << "option name UseNNUE type check default " << (use_nnue_ ? "true" : "false") << '\n'
                       << "option name EvalFile type string default " << nnue::description() << '\n'
                       << "option name Hash type spin default 16 min 1 max 4096\n"
-                      << "option name Threads type spin default 1 min 1 max 1\n"
+                      << "option name Threads type spin default 1 min 1 max 256\n"
                       << "option name Move Overhead type spin default 50 min 0 max 5000\n";
             for (const Toggle& t : TOGGLES)
                 std::cout << "option name " << t.name << " type check default " << (*t.flag ? "true" : "false") << '\n';
@@ -207,11 +207,14 @@ private:
                 searcher_.move_overhead = std::clamp(std::stoi(value), 0, 5000);
                 return;
             }
+            if (n == "threads") {
+                searcher_.set_threads(std::clamp(std::stoi(value), 1, 256));
+                return;
+            }
         } catch (const std::exception&) {
             std::cout << "info string bad value for " << name << std::endl;
             return;
         }
-        if (n == "threads") return;
         if (n == "evalfile") {
             if (!nnue::load(value)) std::cout << "info string failed to load network " << value << std::endl;
             else std::cout << "info string loaded network " << value << std::endl;

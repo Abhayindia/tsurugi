@@ -111,6 +111,7 @@ void Searcher::new_game() {
     std::memset(np_corr_, 0, sizeof(np_corr_));
     std::memset(capt_, 0, sizeof(capt_));
     std::fill(threat_hist_.begin(), threat_hist_.end(), 0);
+    for (auto& h : helpers_) h->new_game();
 }
 
 // Every square the side not to move attacks.
@@ -191,6 +192,7 @@ void Searcher::setup_time(const Position& pos, const SearchLimits& limits) {
 bool Searcher::out_of_time() {
     if (stop_.load(std::memory_order_relaxed)) return true;
     if ((nodes_ & 1023) != 0) return false;
+    shared_nodes_.store(nodes_, std::memory_order_relaxed);
     if ((node_limit_ && nodes_ >= node_limit_) || (hard_ >= 0 && elapsed() >= hard_)) {
         stop_.store(true, std::memory_order_relaxed);
         return true;
@@ -618,9 +620,15 @@ std::uint64_t Searcher::root_nodes_of(Move m) const {
 SearchResult Searcher::search(Position& pos, const SearchLimits& limits, bool verbose) {
     start_ = now_ms();
     nodes_ = 0;
-    node_limit_ = limits.nodes;
-    setup_time(pos, limits);
-    TT.new_search();
+    shared_nodes_.store(0, std::memory_order_relaxed);
+    if (helper_) {
+        node_limit_ = 0;
+        soft_ = hard_ = -1;
+    } else {
+        node_limit_ = limits.nodes;
+        setup_time(pos, limits);
+        TT.new_search();
+    }
     std::memset(stack_, 0, sizeof(stack_));
     for (auto& f : stack_) f.static_eval = VALUE_NONE;
     root_count_ = 0;
@@ -637,6 +645,7 @@ SearchResult Searcher::search(Position& pos, const SearchLimits& limits, bool ve
     generate_legal(pos, legal_moves);
     if (legal_moves.size == 0) return result;
     result.best = legal_moves.moves[0];
+    if (!helper_) start_helpers(pos, limits);
 
     Value prev = 0;
     for (int depth = 1; depth <= limits.depth; ++depth) {
@@ -674,8 +683,9 @@ SearchResult Searcher::search(Position& pos, const SearchLimits& limits, bool ve
         if (verbose) {
             std::int64_t t = elapsed();
             std::ostringstream ss;
+            std::uint64_t n = total_nodes();
             ss << "info depth " << depth << " seldepth " << seldepth_ << " score " << score_to_uci(v) << " nodes "
-               << nodes_ << " nps " << (t ? nodes_ * 1000 / t : nodes_) << " hashfull " << TT.hashfull() << " time "
+               << n << " nps " << (t ? n * 1000 / t : n) << " hashfull " << TT.hashfull() << " time "
                << t << " pv";
             for (int k = 0; k < pv_len_[0]; ++k) ss << ' ' << move_to_uci(pv_[0][k]);
             std::cout << ss.str() << std::endl;
@@ -695,8 +705,37 @@ SearchResult Searcher::search(Position& pos, const SearchLimits& limits, bool ve
         if (soft_ >= 0 && elapsed() >= soft_ * 2 / 5 * scale) break;
         if (node_limit_ && nodes_ >= node_limit_) break;
     }
-    result.nodes = nodes_;
+    if (!helper_) stop_helpers();
+    result.nodes = total_nodes();
     return result;
+}
+
+void Searcher::set_threads(int n) {
+    helpers_.clear();
+    for (int i = 1; i < n; ++i) {
+        helpers_.push_back(std::make_unique<Searcher>());
+        helpers_.back()->helper_ = true;
+    }
+}
+
+void Searcher::start_helpers(const Position& pos, const SearchLimits& limits) {
+    for (auto& h : helpers_) {
+        h->clear_stop();
+        Searcher* s = h.get();
+        helper_threads_.emplace_back([s, p = Position(pos), limits]() mutable { s->search(p, limits, false); });
+    }
+}
+
+void Searcher::stop_helpers() {
+    for (auto& h : helpers_) h->request_stop();
+    for (auto& t : helper_threads_) t.join();
+    helper_threads_.clear();
+}
+
+std::uint64_t Searcher::total_nodes() const {
+    std::uint64_t n = nodes_;
+    for (const auto& h : helpers_) n += h->shared_nodes_.load(std::memory_order_relaxed);
+    return n;
 }
 
 std::uint64_t bench(Searcher& searcher, int depth) {
