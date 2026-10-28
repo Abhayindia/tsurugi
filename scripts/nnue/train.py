@@ -88,19 +88,19 @@ class Net(nn.Module):
                 self.ft.weight[:self.pad] = (self.ft.weight[:self.pad] + shared).clamp(-WEIGHT_CLIP, WEIGHT_CLIP) - shared
             self.out.weight.clamp_(-WEIGHT_CLIP, WEIGHT_CLIP)
 
-    def forward(self, white, black, stm):
+    def forward(self, white, black, stm, with_hidden=False):
         w = self.inputs(white)
         b = self.inputs(black)
         s = stm.unsqueeze(1).bool()
         us, them = torch.where(s, b, w), torch.where(s, w, b)
         x = torch.clamp(torch.cat([us, them], 1), 0, 1)
-        out = self.out(x * x if self.screlu else x)
-        if self.buckets == 1:
-            return out.squeeze(1)
+        x = x * x if self.screlu else x
+        out = self.out(x)
         # Same bucket as the engine: the piece count (kings included) split evenly over 2..32.
         pieces = (white != self.pad).sum(1)
         bucket = torch.clamp((pieces - 2) * self.buckets // 32, 0, self.buckets - 1)
-        return out.gather(1, bucket.unsqueeze(1)).squeeze(1)
+        out = out.squeeze(1) if self.buckets == 1 else out.gather(1, bucket.unsqueeze(1)).squeeze(1)
+        return (out, x, bucket) if with_hidden else out
 
 
 def export(net, path, hidden):
@@ -140,6 +140,8 @@ def main():
     ap.add_argument("--threads", type=int, default=4)
     ap.add_argument("--val", type=float, default=0.02)
     ap.add_argument("--wdl", type=float, default=0.0, help="weight of the game result in the target (0 = score only)")
+    ap.add_argument("--hetero", type=float, default=None, metavar="BETA",
+                    help="train a log-variance head jointly with the value under the beta-NLL loss (not exported)")
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     a = ap.parse_args()
     torch.set_num_threads(a.threads)
@@ -155,7 +157,18 @@ def main():
     print(f"{len(train_idx)} training / {n_val} validation positions", flush=True)
 
     net = Net(a.hidden, a.buckets, a.king_layout, a.factorize, a.screlu).to(dev)
-    opt = torch.optim.Adam(net.parameters(), lr=a.lr)
+    params = list(net.parameters())
+    var = None
+    if a.hetero is not None:
+        # Log-variance head on the (gradient-stopped) hidden layer, started at the targets' variance.
+        score = 1.0 / (1.0 + np.exp(-c[train_idx[:1000000]] / SCALE))
+        res = r[train_idx[:1000000]]
+        tgt0 = np.where(res < 0, score, (1 - a.wdl) * score + a.wdl * res)
+        var = nn.Linear(2 * a.hidden, a.buckets).to(dev)
+        nn.init.zeros_(var.weight)
+        nn.init.constant_(var.bias, float(np.log(np.var(tgt0))))
+        params += list(var.parameters())
+    opt = torch.optim.Adam(params, lr=a.lr)
     sched = torch.optim.lr_scheduler.StepLR(opt, step_size=max(1, a.epochs // 3), gamma=0.3)
 
     # Only the compact int16 features cross to the device; the index arithmetic runs there.
@@ -168,15 +181,35 @@ def main():
         result = torch.from_numpy(r[idx]).to(dev)
         return torch.where(result < 0, score, (1 - a.wdl) * score + a.wdl * result)
 
-    def val_loss():
+    def residual(w, b, st, target):
+        out, x, k = net(w, b, st, with_hidden=True)
+        res = torch.sigmoid(out) - target
+        if var is None:
+            return res, None
+        return res, var(x.detach()).gather(1, k.unsqueeze(1)).squeeze(1)
+
+    def loss_fn(res, logvar):
+        if logvar is None:
+            return torch.mean(res ** 2)
+        # beta-NLL (Seitzer et al. 2022): each position's NLL weighted by its own predicted variance ** beta.
+        nll = 0.5 * (res ** 2 * torch.exp(-logvar) + logvar)
+        return torch.mean(torch.exp(a.hetero * logvar).detach() * nll)
+
+    def val_stats():
         net.eval()
-        losses = []
+        stats = []
         with torch.no_grad():
             for i in range(0, len(val_idx), a.batch):
-                w, b, st, target = batch(val_idx[i:i + a.batch])
-                losses.append(torch.mean((torch.sigmoid(net(w, b, st)) - target) ** 2).item())
+                res, logvar = residual(*batch(val_idx[i:i + a.batch]))
+                if logvar is None:
+                    stats.append([torch.mean(res ** 2).item()])
+                    continue
+                sigma, err = torch.exp(0.5 * logvar), res.abs()
+                corr = torch.mean((sigma - sigma.mean()) * (err - err.mean())) / (sigma.std() * err.std() + 1e-12)
+                stats.append([torch.mean(res ** 2).item(),
+                              torch.mean(0.5 * (res ** 2 * torch.exp(-logvar) + logvar)).item(), corr.item()])
         net.train()
-        return float(np.mean(losses))
+        return np.mean(stats, axis=0)
 
     history = []
     for epoch in range(a.epochs):
@@ -184,20 +217,23 @@ def main():
         rng.shuffle(train_idx)
         for i in range(0, len(train_idx), a.batch):
             w, b, st, target = batch(train_idx[i:i + a.batch])
-            loss = torch.mean((torch.sigmoid(net(w, b, st)) - target) ** 2)
+            loss = loss_fn(*residual(w, b, st, target))
             opt.zero_grad()
             loss.backward()
             opt.step()
             net.clip()
             tot, nb = tot + loss.detach(), nb + 1
         sched.step()
-        history.append({"epoch": epoch + 1, "train_loss": tot.item() / nb, "val_loss": val_loss(),
+        stats = val_stats()
+        history.append({"epoch": epoch + 1, "train_loss": tot.item() / nb, "val_loss": float(stats[0]),
                         "seconds": round(time.time() - t0)})
+        if var is not None:
+            history[-1].update(val_nll=float(stats[1]), val_sigma_corr=float(stats[2]))
         print(json.dumps(history[-1]), flush=True)
         export(net, a.out, a.hidden)
 
     Path(a.out).with_suffix(".json").write_text(json.dumps(
-        {"data": a.data, "positions": len(c), "hidden": a.hidden, "buckets": a.buckets, "king_layout": a.king_layout, "factorize": a.factorize, "screlu": a.screlu, "epochs": a.epochs, "batch": a.batch, "lr": a.lr, "wdl": a.wdl,
+        {"data": a.data, "positions": len(c), "hidden": a.hidden, "buckets": a.buckets, "king_layout": a.king_layout, "factorize": a.factorize, "screlu": a.screlu, "hetero": a.hetero, "epochs": a.epochs, "batch": a.batch, "lr": a.lr, "wdl": a.wdl,
          "scale": SCALE, "qa": QA, "qb": QB, "history": history}, indent=1))
 
 
