@@ -14,6 +14,7 @@ on:
       shards: {description: "JSON array of shard numbers", default: "[1,2,3,4,5,6,7,8]"}
       seed_offset: {description: "added to the shard number to seed each chain", default: "0"}
       net: {description: "network in the repo placed next to the binary", default: "nets/tsurugi-v11.nnue"}
+      start: {description: "JSON object of starting values (empty: the engine's defaults)", default: ""}
 
 jobs:
   tune:
@@ -49,8 +50,10 @@ jobs:
           curl -sL -o book.zip https://github.com/official-stockfish/books/raw/master/UHO_Lichess_4852_v1.epd.zip
           unzip -q book.zip
       - name: Tune
+        env:
+          START: ${{ inputs.start }}
         run: |
-          python3 scripts/spsa.py --engine build/tsurugi --fastchess fastchess/fastchess --book UHO_Lichess_4852_v1.epd \
+          python3 scripts/spsa.py --start "$START" --engine build/tsurugi --fastchess fastchess/fastchess --book UHO_Lichess_4852_v1.epd \
             --hours ${{ inputs.hours }} --iterations ${{ inputs.iterations }} --pairs ${{ inputs.pairs }} \
             --tc ${{ inputs.tc }} --seed $(( ${{ inputs.seed_offset }} + ${{ matrix.shard }} )) \
             --out spsa-${{ inputs.run_tag }}-${{ matrix.shard }}.json | tail -n 5

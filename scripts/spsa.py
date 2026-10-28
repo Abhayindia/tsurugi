@@ -7,6 +7,8 @@ Each iteration moves every parameter by +-c_k with random signs, plays --pairs g
 engines and steps the parameters along the score difference, with the schedule Fishtest uses:
 c_k = c_end * (N / k)^0.101, r_k = r_end * ((A + N) / (A + k))^0.602, A = N / 10, c_end = (max - min) / 20.
 The JSON written after every iteration holds the current values and the per-iteration results.
+Parallel chains that start from the same values are combined by summing their moves (start + sum of
+(final - start)), which matches one chain with all of their iterations; averaging would keep only 1/chains of it.
 """
 import argparse
 import json
@@ -56,9 +58,14 @@ def main():
     ap.add_argument("--concurrency", type=int, default=os.cpu_count())
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--out", default="spsa.json")
+    ap.add_argument("--start", default="", help="JSON object of starting values (default: the engine's defaults)")
     a = ap.parse_args()
 
     params = read_params(a.engine)
+    start = json.loads(a.start) if a.start else {}
+    for p in params:
+        if p["name"] in start:
+            p["value"] = float(min(max(start[p["name"]], p["min"]), p["max"]))
     rng = random.Random(a.seed)
     n, big_a = a.iterations, a.iterations / 10
     history = []
