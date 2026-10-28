@@ -1,7 +1,7 @@
 """Train Tsurugi's NNUE with JAX, for TPUs (Kaggle TPU VMs); same model, data, targets and file format as train.py.
 
 Usage: python scripts/nnue/train_jax.py --data <dir[,dir:N...]> --out net.nnue [--hidden 1536] [--buckets 8]
-       [--epochs 15] [--wdl 0.25]
+       [--epochs 15] [--wdl 0.25] [--hetero 0.5]
 The batch is split across all local devices (data parallel); weights are exported after every epoch.
 """
 import argparse
@@ -78,7 +78,7 @@ def accumulate(p, idx, pad):
     return acc
 
 
-def forward(p, feats, stm, buckets, layout=0, screlu=False):
+def forward(p, feats, stm, buckets, layout=0, screlu=False, with_hidden=False):
     pad = 768 * KING_BUCKETS[layout]
     white, black = views(feats, layout)
     w = accumulate(p, white, pad)
@@ -89,7 +89,8 @@ def forward(p, feats, stm, buckets, layout=0, screlu=False):
         x = x * x
     pieces = (white != pad).sum(1)
     k = jnp.clip((pieces - 2) * buckets // 32, 0, buckets - 1) if buckets > 1 else jnp.zeros_like(pieces)
-    return (x * p["out_w"][k]).sum(1) + p["out_b"][k]
+    out = (x * p["out_w"][k]).sum(1) + p["out_b"][k]
+    return (out, x, k) if with_hidden else out
 
 
 def export(p, path, hidden, buckets, layout=0, screlu=False):
@@ -126,6 +127,8 @@ def main():
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--val", type=float, default=0.02)
     ap.add_argument("--wdl", type=float, default=0.0)
+    ap.add_argument("--hetero", type=float, default=None, metavar="BETA",
+                    help="train a log-variance head jointly with the value under the beta-NLL loss (not exported)")
     a = ap.parse_args()
 
     devices = jax.devices()
@@ -147,12 +150,38 @@ def main():
     sched = optax.piecewise_constant_schedule(
         a.lr, {steps_per_epoch * max(1, a.epochs // 3) * i: 0.3 for i in range(1, 4)})
     opt = optax.adam(sched)
-    params = jax.device_put(init(jax.random.PRNGKey(1), a.hidden, a.buckets, a.king_layout, a.factorize), repl)
+    params = init(jax.random.PRNGKey(1), a.hidden, a.buckets, a.king_layout, a.factorize)
+    if a.hetero is not None:
+        # Log-variance head on the (gradient-stopped) hidden layer, started at the targets' variance.
+        params["var_w"] = jnp.zeros((a.buckets, 2 * a.hidden))
+        params["var_b"] = jnp.full((a.buckets,), float(np.log(np.var(target[train_idx]))))
+    params = jax.device_put(params, repl)
     pad = 768 * KING_BUCKETS[a.king_layout]
     opt_state = jax.device_put(opt.init(params), repl)
 
+    def residual(p, feats, stm, tgt):
+        out, x, k = forward(p, feats, stm, a.buckets, a.king_layout, a.screlu, with_hidden=True)
+        r = jax.nn.sigmoid(out) - tgt
+        if a.hetero is None:
+            return r, None
+        return r, (jax.lax.stop_gradient(x) * p["var_w"][k]).sum(1) + p["var_b"][k]
+
     def loss_fn(p, feats, stm, tgt):
-        return jnp.mean((jax.nn.sigmoid(forward(p, feats, stm, a.buckets, a.king_layout, a.screlu)) - tgt) ** 2)
+        r, logvar = residual(p, feats, stm, tgt)
+        if logvar is None:
+            return jnp.mean(r ** 2)
+        # beta-NLL (Seitzer et al. 2022): each position's NLL weighted by its own predicted variance ** beta.
+        nll = 0.5 * (r ** 2 * jnp.exp(-logvar) + logvar)
+        return jnp.mean(jax.lax.stop_gradient(jnp.exp(a.hetero * logvar)) * nll)
+
+    @jax.jit
+    def eval_stats(p, feats, stm, tgt):
+        r, logvar = residual(p, feats, stm, tgt)
+        if logvar is None:
+            return jnp.mean(r ** 2), 0.0, 0.0
+        sigma, err = jnp.exp(0.5 * logvar), jnp.abs(r)
+        corr = jnp.mean((sigma - sigma.mean()) * (err - err.mean())) / (sigma.std() * err.std() + 1e-12)
+        return jnp.mean(r ** 2), jnp.mean(0.5 * (r ** 2 * jnp.exp(-logvar) + logvar)), corr
 
     @jax.jit
     def step(p, st, feats, stm, tgt):
@@ -170,8 +199,6 @@ def main():
         p = {**p, "out_w": jnp.clip(p["out_w"], -WEIGHT_CLIP, WEIGHT_CLIP)}
         return p, st, loss
 
-    eval_loss = jax.jit(loss_fn)
-
     def put(idx):
         return (jax.device_put(f[idx], shard), jax.device_put(s[idx].astype(np.int32), shard),
                 jax.device_put(target[idx], shard))
@@ -185,14 +212,16 @@ def main():
             params, opt_state, loss = step(params, opt_state, *put(train_idx[i * batch:(i + 1) * batch]))
             losses.append(loss)
         vb = [val_idx[i:i + batch] for i in range(0, len(val_idx) - batch + 1, batch)] or [val_idx]
-        val = float(np.mean([float(eval_loss(params, *put(v))) for v in vb]))
-        history.append({"epoch": epoch + 1, "train_loss": float(jnp.mean(jnp.stack(losses))), "val_loss": val,
+        stats = np.mean([[float(x) for x in eval_stats(params, *put(v))] for v in vb], axis=0)
+        history.append({"epoch": epoch + 1, "train_loss": float(jnp.mean(jnp.stack(losses))), "val_loss": stats[0],
                         "seconds": round(time.time() - t0)})
+        if a.hetero is not None:
+            history[-1].update(val_nll=stats[1], val_sigma_corr=stats[2])
         print(json.dumps(history[-1]), flush=True)
-        export(jax.device_get(params), a.out, a.hidden, a.buckets, a.king_layout, a.screlu)
+        export(jax.device_get({k: v for k, v in params.items() if not k.startswith("var_")}), a.out, a.hidden, a.buckets, a.king_layout, a.screlu)
 
     Path(a.out).with_suffix(".json").write_text(json.dumps(
-        {"data": a.data, "positions": len(c), "hidden": a.hidden, "buckets": a.buckets, "king_layout": a.king_layout, "factorize": a.factorize, "screlu": a.screlu, "epochs": a.epochs,
+        {"data": a.data, "positions": len(c), "hidden": a.hidden, "buckets": a.buckets, "king_layout": a.king_layout, "factorize": a.factorize, "screlu": a.screlu, "hetero": a.hetero, "epochs": a.epochs,
          "batch": batch, "lr": a.lr, "wdl": a.wdl, "trainer": "jax", "devices": len(devices),
          "scale": SCALE, "qa": QA, "qb": QB, "history": history}, indent=1))
 
