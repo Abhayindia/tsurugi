@@ -32,34 +32,17 @@ struct SearchFeatures {
     bool counter_moves = true;
     bool staged_tt = true;
     bool cont_history = true;
-    bool iir = false;
     bool singular = true;
     bool corr_history = true;
     bool nonpawn_corr = true;
-    bool capt_history = false;
     bool node_tm = true;
     bool cut_node = true;
     bool probcut = true;
     bool singular_v2 = true;
     bool tt_pv = true;
-    bool lmr_terms = false;
-    bool iir_cut = false;
-    bool unc_prune = false;
-    bool unc_lmr = false;
-    bool unc_prune2 = false;
-    bool unc_lmr2 = false;
     bool unc_tm = true;
-    bool lmr_history = false;
-    bool cuckoo = false;
-    bool cont_corr = false;
-    bool pawn_history = false;
     bool threat_history = true;
-    bool eval_drop_hist = false;
     bool capt_hist_see = true;
-    bool hist_prune = false;
-    bool qs_futility = false;
-    bool lmr_deeper = false;
-    bool tt_eval = false;
 };
 
 extern SearchFeatures Features;
@@ -89,7 +72,6 @@ private:
         Value static_eval;
         Move excluded;
         int double_ext;  // double extensions already made on the path to this node
-        int pawn_idx;    // pawn-history slot of this node's pawn structure
         U64 threats;     // squares the opponent attacks at this node
     };
 
@@ -104,8 +86,7 @@ private:
     void update_capture_stats(const Position& pos, Move best, const Move* captures, int nc, int depth);
     int& corr_entry(const Position& pos);
     int& nonpawn_corr_entry(const Position& pos, Color side);
-    int* cont_corr_entry(const Position& pos, int ply);
-    Value corrected(const Position& pos, Value raw, int ply);
+    Value corrected(const Position& pos, Value raw);
     void setup_time(const Position& pos, const SearchLimits& limits);
     std::int64_t elapsed() const;
 
@@ -131,12 +112,7 @@ private:
     int corr_[COLOR_NB][CORR_SIZE] = {};
     // The same, keyed by one side's non-pawn pieces: [side to move][side whose pieces][key].
     int np_corr_[COLOR_NB][COLOR_NB][CORR_SIZE] = {};
-    // The same, keyed by the last two moves: [side to move][piece, to two plies up][piece, to one ply up].
-    std::vector<int> cont_corr_ = std::vector<int>(int(COLOR_NB) * PIECE_NB * SQUARE_NB * PIECE_NB * SQUARE_NB);
     std::vector<int> cont_ = std::vector<int>(int(PIECE_NB) * SQUARE_NB * PIECE_NB * SQUARE_NB);
-    // Pawn history: [pawn-structure slot][piece][to], for quiet moves.
-    static constexpr int PAWN_HIST_SIZE = 512;
-    std::vector<int> pawn_hist_ = std::vector<int>(PAWN_HIST_SIZE * PIECE_NB * SQUARE_NB);
     // Threat history: [side][from attacked][to attacked][from][to], replaces the main history for quiet moves.
     std::vector<int> threat_hist_ = std::vector<int>(int(COLOR_NB) * 4 * SQUARE_NB * SQUARE_NB);
     Frame stack_[MAX_PLY + 4] = {};

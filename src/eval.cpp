@@ -82,10 +82,6 @@ U64 passed_mask[COLOR_NB][SQUARE_NB];
 constexpr Score MOBILITY_WEIGHT[PIECE_TYPE_NB] = {{0, 0}, {4, 4}, {5, 5}, {2, 4}, {1, 2}, {0, 0}};
 constexpr int MOBILITY_CENTER[PIECE_TYPE_NB] = {0, 4, 6, 6, 12, 0};
 constexpr int KING_ATTACK_WEIGHT[PIECE_TYPE_NB] = {0, 2, 2, 3, 5, 0};
-constexpr Score DOUBLED = {-10, -20};
-constexpr Score ISOLATED = {-10, -12};
-constexpr int PASSED_MG[8] = {0, 5, 10, 15, 25, 40, 60, 0};
-constexpr int PASSED_EG[8] = {0, 10, 15, 25, 45, 75, 110, 0};
 constexpr int PASSED2_MG[8] = {0, 2, 5, 7, 12, 20, 30, 0};
 constexpr int PASSED2_EG[8] = {0, 5, 7, 12, 22, 37, 55, 0};
 
@@ -158,26 +154,6 @@ Score eval_side(const Position& pos, Color c) {
         }
     }
 
-    if (EvalTerms.pawn_structure) {
-        for (int f = 0; f < 8; ++f) {
-            int n = popcount(own_pawns & (FILE_A_BB << f));
-            if (n > 1) add(s, DOUBLED, n - 1);
-            if (n && !(own_pawns & adjacent_files[f])) add(s, ISOLATED, n);
-        }
-    }
-
-    if (EvalTerms.passed_pawns) {
-        U64 b = own_pawns;
-        while (b) {
-            int sq = pop_lsb(b);
-            if (!(passed_mask[c][sq] & their_pawns)) {
-                int r = relative_rank(c, sq);
-                s.mg += PASSED_MG[r];
-                s.eg += PASSED_EG[r];
-            }
-        }
-    }
-
     if (EvalTerms.passed_pawns2) {
         U64 b = own_pawns;
         int own_k = pos.king_sq(c), their_k = pos.king_sq(them);
@@ -209,8 +185,7 @@ EvalFeatures EvalTerms;
 Value evaluate(const Position& pos) {
     if (Position::nnue_enabled) return nnue::evaluate(pos.accumulator(), pos.side_to_move(), popcount(pos.pieces()));
     Score total;
-    if (EvalTerms.mobility || EvalTerms.king_safety || EvalTerms.pawn_structure || EvalTerms.passed_pawns ||
-        EvalTerms.passed_pawns2 || EvalTerms.rook_files) {
+    if (EvalTerms.mobility || EvalTerms.king_safety || EvalTerms.passed_pawns2 || EvalTerms.rook_files) {
         Score w = eval_side(pos, WHITE), b = eval_side(pos, BLACK);
         total.mg = w.mg - b.mg;
         total.eg = w.eg - b.eg;

@@ -65,7 +65,6 @@ public:
 
     bool is_draw() const;
     // True if a single reversible move reaches a position seen within the search since the last irreversible move.
-    bool upcoming_repetition(int ply) const;
     U64 compute_key() const;
     // True while a network is loaded and UseNNUE is on; accumulators are only maintained then.
     static inline bool nnue_enabled = false;

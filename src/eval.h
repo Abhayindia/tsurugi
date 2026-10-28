@@ -7,8 +7,6 @@ namespace tsurugi {
 // Evaluation terms beyond material + PST, switchable for SPRT tests and ablation.
 struct EvalFeatures {
     bool mobility = true;
-    bool pawn_structure = false;
-    bool passed_pawns = false;
     bool passed_pawns2 = true;
     bool king_safety = true;
     bool rook_files = true;

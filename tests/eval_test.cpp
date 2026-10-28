@@ -60,7 +60,7 @@ const char* FENS[] = {
 int main() {
     Position::init();
     init_eval();
-    EvalTerms = {true, true, true, true, true};
+    EvalTerms = {true, true, true, true};
     int failures = 0;
     for (const char* fen : FENS) {
         Position a, b;

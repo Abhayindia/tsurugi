@@ -57,6 +57,9 @@ All strength figures are SPRT results against the previous version (fastchess, U
 - Time budget scaled by the network's uncertainty about the root position (active only with a network that has an uncertainty head) +4.8 ± 3.3 (12800 games, 8+0.08).
 
 ### Engine
+- Removed the code and UCI options of 19 techniques that SPRT rejected (IIR, IIRCut, CaptHistory, LmrTerms,
+  LmrHistory, UncPrune, UncLMR, UncPrune2, UncLMR2, Cuckoo, ContCorr, PawnHistory, EvalDropHist, HistPrune,
+  QsFutility, LmrDeeper, TTEval, EvalPawnStructure, EvalPassedPawns); node counts are unchanged.
 - AVX2 kernel for the network output and single-pass accumulator updates: the same search in roughly half the
   CPU time with the 1024-neuron network (identical evaluations and node counts). Actions builds now use the
   runner's native instruction set.

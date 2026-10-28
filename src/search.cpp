@@ -109,9 +109,7 @@ void Searcher::new_game() {
     std::fill(cont_.begin(), cont_.end(), 0);
     std::memset(corr_, 0, sizeof(corr_));
     std::memset(np_corr_, 0, sizeof(np_corr_));
-    std::fill(cont_corr_.begin(), cont_corr_.end(), 0);
     std::memset(capt_, 0, sizeof(capt_));
-    std::fill(pawn_hist_.begin(), pawn_hist_.end(), 0);
     std::fill(threat_hist_.begin(), threat_hist_.end(), 0);
 }
 
@@ -129,11 +127,6 @@ static int threat_idx(Color us, U64 threats, Move m) {
     int from = from_sq(m), to = to_sq(m);
     int k = int(us) * 4 + int((threats >> from) & 1) * 2 + int((threats >> to) & 1);
     return (k * SQUARE_NB + from) * SQUARE_NB + to;
-}
-
-static int pawn_slot(const Position& pos) {
-    U64 h = (pos.pieces(WHITE, PAWN) * 0x9E3779B97F4A7C15ULL) ^ (pos.pieces(BLACK, PAWN) * 0xC2B2AE3D27D4EB4FULL);
-    return int(h >> 55);
 }
 
 int& Searcher::capt_entry(const Position& pos, Move m) {
@@ -154,19 +147,10 @@ int& Searcher::nonpawn_corr_entry(const Position& pos, Color side) {
     return np_corr_[pos.side_to_move()][side][h >> 50];
 }
 
-int* Searcher::cont_corr_entry(const Position& pos, int ply) {
-    if (ply < 2 || stack_[ply - 1].current == NO_MOVE || stack_[ply - 2].current == NO_MOVE) return nullptr;
-    const Frame &a = stack_[ply - 2], &b = stack_[ply - 1];
-    int i = ((int(pos.side_to_move()) * PIECE_NB + a.moved) * SQUARE_NB + to_sq(a.current)) * PIECE_NB + b.moved;
-    return &cont_corr_[i * SQUARE_NB + to_sq(b.current)];
-}
-
-Value Searcher::corrected(const Position& pos, Value raw, int ply) {
+Value Searcher::corrected(const Position& pos, Value raw) {
     if (!Features.corr_history || raw == VALUE_NONE) return raw;
     int c = corr_entry(pos);
     if (Features.nonpawn_corr) c += (nonpawn_corr_entry(pos, WHITE) + nonpawn_corr_entry(pos, BLACK)) / 2;
-    if (Features.cont_corr)
-        if (int* e = cont_corr_entry(pos, ply)) c += *e;
     return std::clamp(raw + c / 256, -VALUE_MATE_IN_MAX_PLY + 1, VALUE_MATE_IN_MAX_PLY - 1);
 }
 
@@ -180,7 +164,6 @@ int* Searcher::cont_entry(int ply, Piece p, int to) {
 int Searcher::quiet_score(Color us, Move m, Piece p, int ply) {
     int s = Features.threat_history ? threat_hist_[threat_idx(us, stack_[ply].threats, m)]
                                     : history_[us][from_sq(m)][to_sq(m)];
-    if (Features.pawn_history) s += pawn_hist_[(stack_[ply].pawn_idx * PIECE_NB + p) * SQUARE_NB + to_sq(m)];
     if (!Features.cont_history) return s;
     for (int back = 1; back <= 2; ++back)
         if (int* e = cont_entry(ply - back, p, to_sq(m))) s += *e;
@@ -218,7 +201,6 @@ bool Searcher::out_of_time() {
 void Searcher::score_moves(const Position& pos, const Move* moves, int n, int* scores, Move tt_move, int ply) {
     Color us = pos.side_to_move();
     const Frame& f = stack_[ply];
-    if (Features.pawn_history) stack_[ply].pawn_idx = pawn_slot(pos);
     if (Features.threat_history) stack_[ply].threats = threatened(pos);
     Move counter = NO_MOVE;
     if (Features.counter_moves && ply > 0 && stack_[ply - 1].current != NO_MOVE)
@@ -234,8 +216,8 @@ void Searcher::score_moves(const Position& pos, const Move* moves, int n, int* s
             int vv = move_flag(m) == EP_CAPTURE ? PIECE_VALUE[PAWN] : victim == NO_PIECE ? 0 : PIECE_VALUE[type_of(victim)];
             if (is_promotion(m)) vv += PIECE_VALUE[promo_type(m)];
             int s = vv * 16 - type_of(pos.piece_on(from));
-            int ch = (Features.capt_history || Features.capt_hist_see) && is_capture(m) ? capt_entry(pos, m) : 0;
-            s += Features.capt_hist_see ? ch / 4 : ch / 8;
+            int ch = Features.capt_hist_see && is_capture(m) ? capt_entry(pos, m) : 0;
+            s += ch / 4;
             // Captures that usually work out may lose a little material by SEE and still count as good.
             bool good = !Features.see_pruning || see_ge(pos, m, Features.capt_hist_see ? -ch / 48 : 0);
             scores[i] = (good ? 20'000'000 : -20'000'000) + s;
@@ -270,13 +252,6 @@ void Searcher::update_quiet_stats(const Position& pos, Move best, const Move* qu
         history_update(threat_hist_[threat_idx(us, t, best)], bonus);
         for (int i = 0; i < nq; ++i)
             if (quiets[i] != best) history_update(threat_hist_[threat_idx(us, t, quiets[i])], -bonus);
-    }
-    if (Features.pawn_history) {
-        int* ph = &pawn_hist_[pawn_slot(pos) * PIECE_NB * SQUARE_NB];
-        history_update(ph[int(pos.piece_on(from_sq(best))) * SQUARE_NB + to_sq(best)], bonus);
-        for (int i = 0; i < nq; ++i)
-            if (quiets[i] != best)
-                history_update(ph[int(pos.piece_on(from_sq(quiets[i]))) * SQUARE_NB + to_sq(quiets[i])], -bonus);
     }
     if (Features.cont_history) {
         for (int back = 1; back <= 2; ++back) {
@@ -321,7 +296,7 @@ Value Searcher::qsearch(Position& pos, Value alpha, Value beta, int ply) {
         best = -VALUE_MATE + ply;
     } else {
         raw_stand = evaluate(pos);
-        stand = corrected(pos, raw_stand, ply);
+        stand = corrected(pos, raw_stand);
         if (stand >= beta) return stand;
         alpha = std::max(alpha, stand);
         best = stand;
@@ -345,14 +320,6 @@ Value Searcher::qsearch(Position& pos, Value alpha, Value beta, int ply) {
         Move m = list.moves[i];
         if (!pos.legal(m)) continue;
         ++legal;
-        // Skip captures that cannot lift a static eval plus margin above alpha.
-        if (!in_check && Features.qs_futility && !is_promotion(m)) {
-            Value fbase = stand + 200;
-            Piece cap = move_flag(m) == EP_CAPTURE ? make_piece(~pos.side_to_move(), PAWN) : pos.piece_on(to_sq(m));
-            Value fv = fbase + SEE_VALUE[type_of(cap)];
-            if (fv <= alpha) { best = std::max(best, fv); continue; }
-            if (fbase <= alpha && !see_ge(pos, m, 1)) { best = std::max(best, fbase); continue; }
-        }
         if (!in_check && Features.see_pruning && !see_ge(pos, m, 0)) continue;
 
         stack_[ply].current = m;
@@ -397,10 +364,6 @@ Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int p
         alpha = std::max(alpha, -VALUE_MATE + ply);
         beta = std::min(beta, VALUE_MATE - ply - 1);
         if (alpha >= beta) return alpha;
-        if (Features.cuckoo && alpha < VALUE_DRAW && pos.upcoming_repetition(ply)) {
-            alpha = VALUE_DRAW;
-            if (alpha >= beta) return alpha;
-        }
     }
 
     Move excluded = stack_[ply].excluded;
@@ -419,46 +382,19 @@ Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int p
     // Nodes that were once on the principal variation get searched a little wider.
     bool tt_pv = Features.tt_pv && (pv || (tt_hit && tte.is_pv()));
 
-    // No TT move at a deep node: search it shallower; the result fills the TT for the next visit.
-    if ((Features.iir || (Features.iir_cut && (pv || cut))) && depth >= 4 && tt_move == NO_MOVE) --depth;
-
     bool in_check = pos.in_check();
     Value raw_eval = in_check ? VALUE_NONE : tt_hit ? Value(tte.eval) : evaluate(pos);
-    Value eval = corrected(pos, raw_eval, ply);
-    // The network's own estimate of how wrong this static eval is (cp); -1 when unused or unavailable.
-    int unc = -1;
-    bool use_unc = Features.unc_prune || Features.unc_lmr || Features.unc_prune2 || Features.unc_lmr2;
-    if (use_unc && !in_check && Position::nnue_enabled && nnue::has_uncertainty())
-        unc = nnue::uncertainty(pos.accumulator(), pos.side_to_move(), popcount(pos.pieces()));
-    int unc_margin = Features.unc_prune && unc > 0 ? unc / 2 : 0;
-    // Centred version: about 80 cp is the network's typical error, so margins tighten below it and widen above it.
-    if (Features.unc_prune2 && unc >= 0) unc_margin = std::clamp(unc - 80, -60, 120) / 4;
+    Value eval = corrected(pos, raw_eval);
     stack_[ply].static_eval = eval;
-    // A quiet move that left the opponent with a worse static eval than ours before it was probably good.
-    if (Features.eval_drop_hist && !in_check) {
-        Move pm = ply > 0 && excluded == NO_MOVE ? stack_[ply - 1].current : NO_MOVE;
-        const Frame& prev = stack_[ply > 0 ? ply - 1 : 0];
-        if (pm != NO_MOVE && prev.static_eval != VALUE_NONE && !is_capture(pm) && !is_promotion(pm)) {
-            int bonus = std::clamp(-2 * (prev.static_eval + eval), -320, 300) + 120;
-            Color them = ~pos.side_to_move();
-            if (Features.threat_history) history_update(threat_hist_[threat_idx(them, prev.threats, pm)], bonus);
-            else history_update(history_[them][from_sq(pm)][to_sq(pm)], bonus);
-        }
-        if (Features.threat_history) stack_[ply].threats = threatened(pos);
-    }
     bool improving = !in_check && ply >= 2 && stack_[ply - 2].static_eval != VALUE_NONE &&
                      eval > stack_[ply - 2].static_eval;
-    // A TT score whose bound points the same way as the gap is a better estimate than the static eval.
-    if (Features.tt_eval && !in_check && eval != VALUE_NONE && tt_value != VALUE_NONE &&
-        std::abs(tt_value) < VALUE_MATE_IN_MAX_PLY && (tte.bound() & (tt_value > eval ? BOUND_LOWER : BOUND_UPPER)))
-        eval = tt_value;
     stack_[ply + 1].killers[0] = stack_[ply + 1].killers[1] = NO_MOVE;
 
     if (!pv && !in_check && excluded == NO_MOVE) {
-        if (Features.rfp && depth <= 8 && eval - 75 * (depth - improving) - unc_margin >= beta && eval < VALUE_MATE_IN_MAX_PLY)
+        if (Features.rfp && depth <= 8 && eval - 75 * (depth - improving) >= beta && eval < VALUE_MATE_IN_MAX_PLY)
             return eval;
 
-        if (Features.razoring && depth <= 3 && eval + 200 + 150 * depth + unc_margin <= alpha) {
+        if (Features.razoring && depth <= 3 && eval + 200 + 150 * depth <= alpha) {
             Value v = qsearch(pos, alpha, alpha + 1, ply);
             if (v <= alpha) return v;
         }
@@ -569,11 +505,7 @@ Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int p
 
         if (!root && best > -VALUE_MATE_IN_MAX_PLY && pos.has_non_pawn_material(pos.side_to_move())) {
             if (quiet && Features.lmp && depth <= 6 && nq >= (3 + depth * depth) / (improving ? 1 : 2)) continue;
-            if (quiet && Features.futility && !in_check && depth <= 6 && eval + 100 + 90 * depth + unc_margin <= alpha) continue;
-            // Quiet moves that have kept failing in similar positions are not worth a shallow search.
-            if (quiet && Features.hist_prune && depth <= 4 && legal > 0 &&
-                quiet_score(pos.side_to_move(), m, pos.piece_on(from_sq(m)), ply) < -2500 * depth)
-                continue;
+            if (quiet && Features.futility && !in_check && depth <= 6 && eval + 100 + 90 * depth <= alpha) continue;
             if (Features.see_pruning && depth <= 6 &&
                 !see_ge(pos, m, quiet ? -60 * depth : -25 * depth * depth))
                 continue;
@@ -601,16 +533,6 @@ Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int p
                 r -= gives_check;
                 if (Features.cut_node) r += 2 * cut;
                 r -= tt_pv && !pv;
-                if (Features.unc_lmr && unc >= 0) r += (unc < 30) - (unc > 120);
-                // Only the extreme quarters: confident below ~35 cp, unsure above ~160 cp.
-                if (Features.unc_lmr2 && unc >= 0 && !pv) r += (unc < 35) - (unc > 160);
-                if (Features.lmr_terms) {
-                    // Trust a deep TT entry, distrust nodes whose TT move is a capture, and reduce less where
-                    // the static eval needed a big correction (an uncertain position).
-                    r -= tt_hit && tte.depth >= depth;
-                    r += tt_move != NO_MOVE && (is_capture(tt_move) || is_promotion(tt_move));
-                    r -= raw_eval != VALUE_NONE && std::abs(eval - raw_eval) > 60;
-                }
                 if (Features.cont_history)
                     r -= quiet_score(~pos.side_to_move(), m, stack_[ply].moved, ply) / 16384;
                 else
@@ -618,20 +540,7 @@ Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int p
                 r = std::clamp(r, 0, std::max(new_depth - 1, 0));
             }
             v = -negamax(pos, -alpha - 1, -alpha, new_depth - r, ply + 1, true);
-            if (v > alpha && r > 0) {
-                // A reduced score far above the best so far earns a deeper re-search, a marginal one a shallower one.
-                if (Features.lmr_deeper)
-                    new_depth += (v > best + 40 + 2 * new_depth) - (v < best + new_depth);
-                v = -negamax(pos, -alpha - 1, -alpha, new_depth, ply + 1, !cut);
-                // The reduced search was wrong about this move: tell continuation history how it really did.
-                if (Features.lmr_history && Features.cont_history && quiet) {
-                    int bonus = std::min(new_depth * new_depth * 16, 1600);
-                    int b = v <= alpha ? -bonus : v >= beta ? bonus : 0;
-                    if (b)
-                        for (int back = 1; back <= 2; ++back)
-                            if (int* e = cont_entry(ply - back, stack_[ply].moved, to_sq(m))) history_update(*e, b);
-                }
-            }
+            if (v > alpha && r > 0) v = -negamax(pos, -alpha - 1, -alpha, new_depth, ply + 1, !cut);
             if (v > alpha && v < beta) v = -negamax(pos, -beta, -alpha, new_depth, ply + 1, false);
         }
         pos.unmake_move(m);
@@ -657,7 +566,7 @@ Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int p
                 pv_len_[ply] = std::max(pv_len_[ply + 1], ply + 1);
                 if (v >= beta) {
                     if (quiet) update_quiet_stats(pos, m, quiets, nq, depth, ply);
-                    if (Features.capt_history || Features.capt_hist_see) update_capture_stats(pos, is_capture(m) ? m : NO_MOVE, captures, nc, depth);
+                    if (Features.capt_hist_see) update_capture_stats(pos, is_capture(m) ? m : NO_MOVE, captures, nc, depth);
                     break;
                 }
             }
@@ -690,8 +599,6 @@ Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int p
             update(nonpawn_corr_entry(pos, WHITE));
             update(nonpawn_corr_entry(pos, BLACK));
         }
-        if (Features.cont_corr)
-            if (int* e = cont_corr_entry(pos, ply)) update(*e);
     }
     TT.store(pos.key(), best_move, score_to_tt(best, ply), raw_eval == VALUE_NONE ? 0 : raw_eval, depth, b, tt_pv);
     return best;
