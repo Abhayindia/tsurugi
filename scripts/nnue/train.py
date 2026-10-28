@@ -142,10 +142,11 @@ def main():
     ap.add_argument("--wdl", type=float, default=0.0, help="weight of the game result in the target (0 = score only)")
     ap.add_argument("--hetero", type=float, default=None, metavar="BETA",
                     help="train a log-variance head jointly with the value under the beta-NLL loss (not exported)")
+    ap.add_argument("--seed", type=int, default=1, help="weight initialisation and shuffling (validation split fixed)")
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     a = ap.parse_args()
     torch.set_num_threads(a.threads)
-    torch.manual_seed(1)
+    torch.manual_seed(a.seed)
     dev = torch.device(a.device)
     print(f"training on {dev}", flush=True)
 
@@ -154,6 +155,7 @@ def main():
     perm = rng.permutation(len(c))
     n_val = int(len(c) * a.val)
     val_idx, train_idx = perm[:n_val], perm[n_val:]
+    shuffle_rng = rng if a.seed == 1 else np.random.default_rng(a.seed)
     print(f"{len(train_idx)} training / {n_val} validation positions", flush=True)
 
     net = Net(a.hidden, a.buckets, a.king_layout, a.factorize, a.screlu).to(dev)
@@ -214,7 +216,7 @@ def main():
     history = []
     for epoch in range(a.epochs):
         t0, tot, nb = time.time(), torch.zeros((), device=dev), 0
-        rng.shuffle(train_idx)
+        shuffle_rng.shuffle(train_idx)
         for i in range(0, len(train_idx), a.batch):
             w, b, st, target = batch(train_idx[i:i + a.batch])
             loss = loss_fn(*residual(w, b, st, target))
