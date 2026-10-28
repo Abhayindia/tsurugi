@@ -84,19 +84,35 @@ bool load(const std::string& path) {
 bool loaded() { return is_loaded; }
 const std::string& description() { return desc; }
 
-void refresh(Accumulator& acc, const Piece board[SQUARE_NB]) {
+void FinnyTable::reset() {
+    for (auto& side : e)
+        for (Entry& x : side) {
+            std::memcpy(x.v, net.ft_b, sizeof(net.ft_b));
+            std::fill(std::begin(x.board), std::end(x.board), NO_PIECE);
+        }
+}
+
+void refresh(Accumulator& acc, const Piece board[SQUARE_NB], FinnyTable& cache) {
     int ksq[COLOR_NB] = {0, 0};
     for (int s = 0; s < 64; ++s) {
         if (board[s] == W_KING) ksq[WHITE] = s;
         if (board[s] == B_KING) ksq[BLACK] = s;
     }
     for (int c = 0; c < COLOR_NB; ++c) {
-        std::memcpy(acc.v[c], net.ft_b, sizeof(net.ft_b));
+        FinnyTable::Entry& x = cache.e[c][king_key(Color(c), ksq[c])];
         for (int s = 0; s < 64; ++s) {
-            if (board[s] == NO_PIECE) continue;
-            const std::int16_t* w = net.ft_w[feature(Color(c), board[s], s, ksq[c])];
-            for (int i = 0; i < HIDDEN; ++i) acc.v[c][i] += w[i];
+            if (x.board[s] == board[s]) continue;
+            if (x.board[s] != NO_PIECE) {
+                const std::int16_t* w = net.ft_w[feature(Color(c), x.board[s], s, ksq[c])];
+                for (int i = 0; i < HIDDEN; ++i) x.v[i] -= w[i];
+            }
+            if (board[s] != NO_PIECE) {
+                const std::int16_t* w = net.ft_w[feature(Color(c), board[s], s, ksq[c])];
+                for (int i = 0; i < HIDDEN; ++i) x.v[i] += w[i];
+            }
+            x.board[s] = board[s];
         }
+        std::memcpy(acc.v[c], x.v, sizeof(x.v));
     }
 }
 

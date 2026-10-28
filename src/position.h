@@ -107,6 +107,7 @@ private:
     std::vector<nnue::Delta> deltas_;
     mutable std::vector<char> acc_ok_;
     std::size_t acc_top_ = 0;
+    std::vector<nnue::FinnyTable> finny_;  // one refresh cache, reset by set_fen
 };
 
 }  // namespace tsurugi

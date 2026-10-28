@@ -178,7 +178,9 @@ bool Position::set_fen(const std::string& fen) {
             deltas_.emplace_back();
             acc_ok_.push_back(0);
         }
-        nnue::refresh(acc_[0], board_);
+        if (finny_.empty()) finny_.resize(1);
+        finny_[0].reset();
+        nnue::refresh(acc_[0], board_, finny_[0]);
         acc_ok_[0] = 1;
     }
     return true;
@@ -358,7 +360,7 @@ void Position::make_move(Move m) {
         deltas_[acc_top_] = delta;
         // A king that changed its input bucket (or side of the board) changes every feature: rebuild now.
         if (nnue::king_key(us, delta.ksq[us]) != king_key_before) {
-            nnue::refresh(acc_[acc_top_], board_);
+            nnue::refresh(acc_[acc_top_], board_, finny_[0]);
             acc_ok_[acc_top_] = 1;
         } else {
             acc_ok_[acc_top_] = 0;

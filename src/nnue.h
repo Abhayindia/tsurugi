@@ -71,7 +71,17 @@ inline int feature(Color c, Piece p, int s, int ksq) {
     return king_bucket(king_view(c, ksq)) * 768 + pc * 64 + sq;
 }
 
-void refresh(Accumulator& acc, const Piece board[SQUARE_NB]);
+// Refresh cache ("Finny table"): for each perspective and king key, the accumulator of the board last seen with that
+// key. A refresh then applies only the squares that differ from that board instead of rebuilding from every piece.
+struct FinnyTable {
+    struct alignas(64) Entry {
+        std::int16_t v[HIDDEN];
+        Piece board[SQUARE_NB];
+    };
+    Entry e[COLOR_NB][2 * MAX_KING_BUCKETS];
+    void reset();  // every entry back to the empty board (call after loading a network)
+};
+void refresh(Accumulator& acc, const Piece board[SQUARE_NB], FinnyTable& cache);
 
 // A move's effect on the inputs: at most two pieces appear and two disappear.
 struct Delta {
