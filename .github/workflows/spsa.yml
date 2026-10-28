@@ -1,0 +1,62 @@
+name: spsa
+run-name: spsa ${{ inputs.run_tag }}
+
+# Independent SPSA chains (scripts/spsa.py), one per shard; the final values of the chains are averaged afterwards.
+on:
+  workflow_dispatch:
+    inputs:
+      run_tag: {description: "unique name of this run", required: true}
+      ref: {description: "commit of the engine", default: "main"}
+      hours: {description: "hours per chain", default: "5"}
+      iterations: {description: "N of the SPSA schedule", default: "600"}
+      pairs: {description: "game pairs per iteration", default: "8"}
+      tc: {description: "time control", default: "5+0.05"}
+      shards: {description: "JSON array of shard numbers", default: "[1,2,3,4,5,6,7,8]"}
+      seed_offset: {description: "added to the shard number to seed each chain", default: "0"}
+      net: {description: "network in the repo placed next to the binary", default: "nets/tsurugi-v11.nnue"}
+
+jobs:
+  tune:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      max-parallel: 8
+      matrix:
+        shard: ${{ fromJSON(inputs.shards) }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {ref: "${{ inputs.ref }}"}
+      - name: Build engine
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DTSURUGI_NATIVE=ON -DTSURUGI_USE_PEXT=OFF -DTSURUGI_TUNE=ON > /dev/null
+          cmake --build build -j"$(nproc)" --target tsurugi > /dev/null
+          cp "${{ inputs.net }}" build/tsurugi.nnue
+      - uses: actions/cache@v4
+        id: fc
+        with: {path: fastchess/fastchess, key: fastchess-ebfd64c}
+      - name: Build fastchess
+        if: steps.fc.outputs.cache-hit != 'true'
+        run: |
+          git clone -q https://github.com/Disservin/fastchess.git && git -C fastchess checkout -q ebfd64c
+          make -C fastchess -j"$(nproc)" > /dev/null
+      - uses: actions/cache@v4
+        id: book
+        with: {path: UHO_Lichess_4852_v1.epd, key: book-uho-4852-v1}
+      - name: Fetch book
+        if: steps.book.outputs.cache-hit != 'true'
+        run: |
+          curl -sL -o book.zip https://github.com/official-stockfish/books/raw/master/UHO_Lichess_4852_v1.epd.zip
+          unzip -q book.zip
+      - name: Tune
+        run: |
+          python3 scripts/spsa.py --engine build/tsurugi --fastchess fastchess/fastchess --book UHO_Lichess_4852_v1.epd \
+            --hours ${{ inputs.hours }} --iterations ${{ inputs.iterations }} --pairs ${{ inputs.pairs }} \
+            --tc ${{ inputs.tc }} --seed $(( ${{ inputs.seed_offset }} + ${{ matrix.shard }} )) \
+            --out spsa-${{ inputs.run_tag }}-${{ matrix.shard }}.json | tail -n 5
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: "spsa-${{ inputs.run_tag }}-${{ matrix.shard }}"
+          path: "spsa-${{ inputs.run_tag }}-${{ matrix.shard }}.json"
+          retention-days: 14

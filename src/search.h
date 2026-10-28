@@ -134,6 +134,8 @@ private:
 };
 
 bool see_ge(const Position& pos, Move m, int threshold);
+// Rebuilds the tables derived from tunable constants (called at start-up and after a tuning option changes).
+void init_search_tables();
 std::uint64_t bench(Searcher& searcher, int depth);
 
 }  // namespace tsurugi

@@ -4,6 +4,7 @@
 #include "movegen.h"
 #include "nnue.h"
 #include "tt.h"
+#include "tune.h"
 
 #include <algorithm>
 #include <chrono>
@@ -24,11 +25,7 @@ constexpr int HISTORY_MAX = 16384;
 int lmr_table[MAX_PLY][64];
 
 struct LmrInit {
-    LmrInit() {
-        for (int d = 1; d < MAX_PLY; ++d)
-            for (int m = 1; m < 64; ++m)
-                lmr_table[d][m] = int(0.7 + std::log(d) * std::log(m) / 2.3);
-    }
+    LmrInit() { init_search_tables(); }
 } lmr_init;
 
 std::int64_t now_ms() {
@@ -393,17 +390,17 @@ Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int p
     stack_[ply + 1].killers[0] = stack_[ply + 1].killers[1] = NO_MOVE;
 
     if (!pv && !in_check && excluded == NO_MOVE) {
-        if (Features.rfp && depth <= 8 && eval - 75 * (depth - improving) >= beta && eval < VALUE_MATE_IN_MAX_PLY)
+        if (Features.rfp && depth <= tune::rfp_depth && eval - tune::rfp_margin * (depth - improving) >= beta && eval < VALUE_MATE_IN_MAX_PLY)
             return eval;
 
-        if (Features.razoring && depth <= 3 && eval + 200 + 150 * depth <= alpha) {
+        if (Features.razoring && depth <= tune::razor_depth && eval + tune::razor_base + tune::razor_mult * depth <= alpha) {
             Value v = qsearch(pos, alpha, alpha + 1, ply);
             if (v <= alpha) return v;
         }
 
         if (Features.null_move && depth >= 3 && eval >= beta && pos.has_non_pawn_material(pos.side_to_move()) &&
             ply > 0 && stack_[ply - 1].current != NO_MOVE && (!Features.cut_node || cut)) {
-            int r = 3 + depth / 4 + std::min((eval - beta) / 200, 3);
+            int r = tune::nmp_base + depth / tune::nmp_depth_div + std::min((eval - beta) / tune::nmp_eval_div, 3);
             stack_[ply].current = NO_MOVE;
             stack_[ply].moved = NO_PIECE;
             stack_[ply + 1].double_ext = stack_[ply].double_ext;
@@ -415,8 +412,8 @@ Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int p
         }
 
         // ProbCut: a capture that clears beta by a wide margin in a shallow search almost always would in a full one.
-        Value pc_beta = beta + 200;
-        if (Features.probcut && depth >= 5 && std::abs(beta) < VALUE_MATE_IN_MAX_PLY &&
+        Value pc_beta = beta + tune::probcut_margin;
+        if (Features.probcut && depth >= tune::probcut_depth && std::abs(beta) < VALUE_MATE_IN_MAX_PLY &&
             !(tt_hit && tte.depth >= depth - 3 && tt_value != VALUE_NONE && tt_value < pc_beta)) {
             MoveList noisy;
             generate<GEN_NOISY>(pos, noisy);
@@ -491,25 +488,25 @@ Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int p
         // Singular extension: if no other move comes close to the TT move's stored score, the TT move is
         // forced and gets searched deeper; if another move also beats beta, the node is cut (multi-cut).
         int extension = 0;
-        if (Features.singular && !root && depth >= 8 && m == tt_move && excluded == NO_MOVE &&
+        if (Features.singular && !root && depth >= tune::se_depth && m == tt_move && excluded == NO_MOVE &&
             tte.depth >= depth - 3 && tte.bound() != BOUND_UPPER && std::abs(tt_value) < VALUE_MATE_IN_MAX_PLY) {
-            Value sbeta = tt_value - 2 * depth;
+            Value sbeta = tt_value - tune::se_mult * depth;
             stack_[ply].excluded = m;
             Value sv = negamax(pos, sbeta - 1, sbeta, (depth - 1) / 2, ply, cut);
             stack_[ply].excluded = NO_MOVE;
             if (stop_.load(std::memory_order_relaxed)) return 0;
             if (sv < sbeta)
-                extension = Features.singular_v2 && !pv && sv < sbeta - 20 && stack_[ply].double_ext < 8 ? 2 : 1;
+                extension = Features.singular_v2 && !pv && sv < sbeta - tune::se_double && stack_[ply].double_ext < 8 ? 2 : 1;
             else if (sbeta >= beta) return sbeta;
             else if (tt_value >= beta) extension = Features.singular_v2 ? -2 : -1;
             else if (Features.singular_v2 && cut) extension = -1;
         }
 
         if (!root && best > -VALUE_MATE_IN_MAX_PLY && pos.has_non_pawn_material(pos.side_to_move())) {
-            if (quiet && Features.lmp && depth <= 6 && nq >= (3 + depth * depth) / (improving ? 1 : 2)) continue;
-            if (quiet && Features.futility && !in_check && depth <= 6 && eval + 100 + 90 * depth <= alpha) continue;
-            if (Features.see_pruning && depth <= 6 &&
-                !see_ge(pos, m, quiet ? -60 * depth : -25 * depth * depth))
+            if (quiet && Features.lmp && depth <= tune::lmp_depth && nq >= (tune::lmp_base + depth * depth) / (improving ? 1 : 2)) continue;
+            if (quiet && Features.futility && !in_check && depth <= tune::fut_depth && eval + tune::fut_base + tune::fut_mult * depth <= alpha) continue;
+            if (Features.see_pruning && depth <= tune::see_depth &&
+                !see_ge(pos, m, quiet ? -tune::see_quiet * depth : -tune::see_noisy * depth * depth))
                 continue;
         }
 
@@ -536,7 +533,7 @@ Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int p
                 if (Features.cut_node) r += 2 * cut;
                 r -= tt_pv && !pv;
                 if (Features.cont_history)
-                    r -= quiet_score(~pos.side_to_move(), m, stack_[ply].moved, ply) / 16384;
+                    r -= quiet_score(~pos.side_to_move(), m, stack_[ply].moved, ply) / tune::lmr_hist_div;
                 else
                     r -= history_[~pos.side_to_move()][from_sq(m)][to_sq(m)] / 8192;
                 r = std::clamp(r, 0, std::max(new_depth - 1, 0));
@@ -611,6 +608,12 @@ Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int p
     return best;
 }
 
+void init_search_tables() {
+    for (int d = 1; d < MAX_PLY; ++d)
+        for (int m = 1; m < 64; ++m)
+            lmr_table[d][m] = int(tune::lmr_base / 100.0 + std::log(d) * std::log(m) / (tune::lmr_div / 100.0));
+}
+
 std::uint64_t Searcher::root_nodes_of(Move m) const {
     for (int k = 0; k < root_count_; ++k)
         if (root_moves_[k] == m) return root_nodes_[k];
@@ -653,7 +656,7 @@ SearchResult Searcher::search(Position& pos, const SearchLimits& limits, bool ve
         root_best_ = NO_MOVE;
         Value v;
         if (Features.aspiration && depth >= 4) {
-            int delta = 20;
+            int delta = tune::asp_delta;
             Value a = std::max(prev - delta, -VALUE_INFINITE), b = std::min(prev + delta, VALUE_INFINITE);
             for (;;) {
                 v = negamax(pos, a, b, depth, 0, false);

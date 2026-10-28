@@ -7,6 +7,7 @@
 #include "position.h"
 #include "search.h"
 #include "tt.h"
+#include "tune.h"
 
 #include <algorithm>
 #include <cctype>
@@ -80,6 +81,11 @@ public:
                       << "option name Move Overhead type spin default 50 min 0 max 5000\n";
             for (const Toggle& t : TOGGLES)
                 std::cout << "option name " << t.name << " type check default " << (*t.flag ? "true" : "false") << '\n';
+#ifdef TSURUGI_TUNE
+            for (const tune::Param& p : tune::params())
+                std::cout << "option name T_" << p.name << " type spin default " << *p.value << " min " << p.min
+                          << " max " << p.max << '\n';
+#endif
             std::cout << "uciok" << std::endl;
         } else if (cmd == "isready") {
             std::cout << "readyok" << std::endl;
@@ -225,6 +231,18 @@ private:
             set_nnue(lower(value) == "true");
             return;
         }
+#ifdef TSURUGI_TUNE
+        for (const tune::Param& p : tune::params())
+            if (n == lower(std::string("T_") + p.name)) {
+                try {
+                    *p.value = std::clamp(std::stoi(value), p.min, p.max);
+                } catch (const std::exception&) {
+                    std::cout << "info string bad value for " << name << std::endl;
+                }
+                init_search_tables();
+                return;
+            }
+#endif
         for (const Toggle& t : TOGGLES)
             if (n == lower(t.name)) {
                 *t.flag = lower(value) == "true";
