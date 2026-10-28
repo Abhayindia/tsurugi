@@ -38,7 +38,7 @@ the previous version; the full record is in [docs/elo_history.md](docs/elo_histo
 **Evaluation**
 - NNUE: 768 → 2×1536 → 1 network with 8 output buckets by piece count, clipped-ReLU activations, int16
   quantisation and lazily updated accumulators, trained with Tsurugi's own PyTorch and JAX trainers
-  ([scripts/nnue](scripts/nnue)); network v10 is v9 (trained on 483M positions) plus a fitted uncertainty head
+  ([scripts/nnue](scripts/nnue)); network v10 is v9 (trained on 482,739,856 positions) plus a fitted uncertainty head
 - A hand-crafted tapered evaluation (material, piece-square tables, mobility, king safety, rook files) is used when
   no network is loaded
 

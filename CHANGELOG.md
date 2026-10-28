@@ -24,8 +24,8 @@ All strength figures are SPRT results against the previous version (fastchess, U
   positions, 14 epochs. +27.2 ± 7.5 over v6 (3200 games, 8+0.08).
 - Network v8 (768 → 2×1536 → 8 output buckets chosen by piece count): v7's self-play and Lichess
   data mix (210M positions, 14 epochs), trained on a Kaggle TPU. +8.4 ± 5.3 over v7 (6400 games, 8+0.08).
-- Network v9 (768 → 2×1536 → 8 output buckets): every self-play game generated so far plus all
-  250M Lichess positions (483M positions, 20 epochs), trained on a Kaggle TPU. +66.2 ± 7.7 over v8 (3200 games, 8+0.08).
+- Network v9 (768 → 2×1536 → 8 output buckets): self-play sets sp2–sp9 plus all 250M Lichess positions
+  (482,739,856 positions, 20 epochs), trained on a Kaggle TPU. +66.2 ± 7.7 over v8 (3200 games, 8+0.08).
 - Network v10 is the default: v9's evaluation unchanged plus an uncertainty head fitted on 1M Lichess positions
   (held-out correlation 0.524), which activates the uncertainty-scaled time budget. +5.5 ± 3.7 over v9
   (9600 games, 8+0.08).
