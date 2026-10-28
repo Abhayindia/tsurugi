@@ -33,12 +33,14 @@ the previous version; the full record is in [docs/elo_history.md](docs/elo_histo
 - Move ordering by TT move, MVV-LVA, capture history, killer and counter moves, threat-aware and continuation
   history
 - Static-eval correction history keyed by pawn and non-pawn structure
-- Time management driven by node distribution, best-move stability and the network's own uncertainty
+- Time management driven by node distribution, best-move stability and, with a network that has an uncertainty
+  head, the network's own uncertainty
+- Lazy SMP multi-threading
 
 **Evaluation**
-- NNUE: 768 → 2×1536 → 1 network with 8 output buckets by piece count, clipped-ReLU activations, int16
-  quantisation and lazily updated accumulators, trained with Tsurugi's own PyTorch and JAX trainers
-  ([scripts/nnue](scripts/nnue)); network v10 is v9 (trained on 482,739,856 positions) plus a fitted uncertainty head
+- NNUE: 768 → 2×1536 → 1 network with 8 output buckets by piece count, squared clipped-ReLU (SCReLU)
+  activations, int16 quantisation and lazily updated accumulators, trained with Tsurugi's own PyTorch and JAX
+  trainers ([scripts/nnue](scripts/nnue)); network v11 is trained on 482,739,856 positions
 - A hand-crafted tapered evaluation (material, piece-square tables, mobility, king safety, rook files) is used when
   no network is loaded
 
@@ -56,6 +58,7 @@ the previous version; the full record is in [docs/elo_history.md](docs/elo_histo
 | Network v8 over v7 (8+0.08) | +8.4 ± 5.3 |
 | Network v9 over v8 (8+0.08) | +66.2 ± 7.7 |
 | Network v10 (v9 + uncertainty head) over v9 (8+0.08) | +5.5 ± 3.7 |
+| Network v11 (v9's data with SCReLU) over v10 (8+0.08) | +13.6 ± 7.1 |
 | Late move reductions | +144.8 ± 27.7 |
 | Null-move pruning | +137.6 ± 28.1 |
 | Aspiration windows | +78.3 ± 21.7 |

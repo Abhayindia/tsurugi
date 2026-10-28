@@ -26,9 +26,13 @@ All strength figures are SPRT results against the previous version (fastchess, U
   data mix (210M positions, 14 epochs), trained on a Kaggle TPU. +8.4 ± 5.3 over v7 (6400 games, 8+0.08).
 - Network v9 (768 → 2×1536 → 8 output buckets): self-play sets sp2–sp9 plus all 250M Lichess positions
   (482,739,856 positions, 20 epochs), trained on a Kaggle TPU. +66.2 ± 7.7 over v8 (3200 games, 8+0.08).
-- Network v10 is the default: v9's evaluation unchanged plus an uncertainty head fitted on 1M Lichess positions
+- Network v10: v9's evaluation unchanged plus an uncertainty head fitted on 1M Lichess positions
   (held-out correlation 0.524), which activates the uncertainty-scaled time budget. +5.5 ± 3.7 over v9
   (9600 games, 8+0.08).
+- Network v11 is the default: v9's data and recipe with SCReLU activations (482,739,856 positions, 20 epochs,
+  trained on a Kaggle TPU). +13.6 ± 7.1 over v10 (3200 games, 8+0.08). It has no uncertainty head, so the
+  uncertainty-scaled time budget is inactive with it. In a controlled A/B (two networks trained on the same 196,824,993
+  positions with the same recipe) SCReLU gave +4.9 ± 3.8 over clipped ReLU (12800 games, 8+0.08).
 - Hand-crafted evaluation terms (used without a network): mobility +77.8 ± 21.3, rook on open and semi-open files
   +37.6 ± 15.0, king safety +18.1 ± 10.0. Passed pawns (−18.8 ± 11.8) was rejected. Pawn structure failed on top
   of five terms (−7.3 ± 7.9) but passed a 12800-game retest on top of nine (+5.8 ± 4.6, 8+0.08); it stays off by
