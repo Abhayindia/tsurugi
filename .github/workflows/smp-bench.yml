@@ -26,6 +26,7 @@ jobs:
           net="${{ inputs.net }}"
           if [ -n "$net" ] && [ -f "$net" ]; then cp "$net" build/tsurugi.nnue; fi
           nproc
+          lscpu | grep -E "Model name|Thread\(s\) per core|Core\(s\) per socket|Socket\(s\)"
       - name: Bench
         run: |
           for r in $(seq ${{ inputs.reps }}); do
