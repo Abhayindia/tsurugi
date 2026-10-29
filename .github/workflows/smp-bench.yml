@@ -1,0 +1,40 @@
+name: smp-bench
+run-name: smp-bench ${{ inputs.run_tag }}
+
+# Fixed-depth bench at several thread counts: nodes per second and time to depth, the two halves of SMP scaling.
+on:
+  workflow_dispatch:
+    inputs:
+      run_tag: {description: "unique name of this run", required: true}
+      ref: {description: "commit of the engine", required: true}
+      depth: {description: "bench depth", default: "14"}
+      threads: {description: "space-separated thread counts", default: "1 2 4"}
+      reps: {description: "repetitions per thread count (interleaved)", default: "5"}
+      net: {description: "network in the repo placed next to the binary", default: "nets/tsurugi-v11.nnue"}
+
+jobs:
+  bench:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with: {ref: "${{ inputs.ref }}"}
+      - name: Build
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DTSURUGI_NATIVE=ON -DTSURUGI_USE_PEXT=OFF > /dev/null
+          cmake --build build -j"$(nproc)" --target tsurugi > /dev/null
+          net="${{ inputs.net }}"
+          if [ -n "$net" ] && [ -f "$net" ]; then cp "$net" build/tsurugi.nnue; fi
+          nproc
+      - name: Bench
+        run: |
+          for r in $(seq ${{ inputs.reps }}); do
+            for t in ${{ inputs.threads }}; do
+              out=$(printf "setoption name Hash value 64\nsetoption name Threads value %s\nbench %s\nquit\n" "$t" "${{ inputs.depth }}" \
+                    | ./build/tsurugi | grep -E "nodes .* nps" | tail -1)
+              n=$(echo "$out" | awk '{print $1}'); nps=$(echo "$out" | awk '{print $3}')
+              echo "threads $t rep $r nodes $n nps $nps ms $(( n * 1000 / nps ))" | tee -a smp.txt
+            done
+          done
+      - uses: actions/upload-artifact@v4
+        with: {name: "smp-${{ inputs.run_tag }}", path: smp.txt, retention-days: 30}

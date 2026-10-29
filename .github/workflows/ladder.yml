@@ -17,6 +17,7 @@ on:
       threads: {description: "threads of the first engine; games run nproc / (larger thread count) at a time", default: "1"}
       opp_threads: {description: "threads of the opponent (empty: same as threads)", default: ""}
       first: {description: "first engine: tsurugi, or the opponent's name to play it against itself", default: "tsurugi"}
+      hash: {description: "hash in MB for both engines", default: "16"}
 
 jobs:
   play:
@@ -90,8 +91,8 @@ jobs:
           if [ "$an" = "$bn" ]; then an=${an}_t$t; bn=${bn}_t$ot; fi
           for e in $a $b; do printf "uci\nquit\n" | $e | grep -E "^id name|EvalFile" || true; done
           ./fastchess/fastchess \
-            -engine cmd=$a name=$an option.Hash=16 option.Threads=$t \
-            -engine cmd=$b name=$bn option.Hash=16 option.Threads=$ot \
+            -engine cmd=$a name=$an option.Hash=${{ inputs.hash }} option.Threads=$t \
+            -engine cmd=$b name=$bn option.Hash=${{ inputs.hash }} option.Threads=$ot \
             -each tc=${{ inputs.tc }} proto=uci \
             -openings file=UHO_Lichess_4852_v1.epd format=epd order=random -srand $seed \
             -repeat -games 2 -rounds ${{ inputs.pairs }} -concurrency "$conc" -recover \
