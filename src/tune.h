@@ -29,13 +29,13 @@ struct Register {
 #endif
 
 TUNABLE(rfp_depth, 8, 4, 12)
-TUNABLE(rfp_margin, 75, 40, 120)
+TUNABLE(rfp_margin, 67, 40, 120)
 TUNABLE(razor_depth, 3, 1, 5)
 TUNABLE(razor_base, 200, 100, 350)
 TUNABLE(razor_mult, 150, 80, 250)
 TUNABLE(nmp_base, 3, 2, 5)
 TUNABLE(nmp_depth_div, 4, 3, 6)
-TUNABLE(nmp_eval_div, 200, 100, 400)
+TUNABLE(nmp_eval_div, 178, 100, 400)
 TUNABLE(probcut_depth, 5, 3, 8)
 TUNABLE(probcut_margin, 200, 120, 320)
 TUNABLE(se_depth, 8, 6, 10)
@@ -47,12 +47,12 @@ TUNABLE(fut_depth, 6, 3, 9)
 TUNABLE(fut_base, 100, 40, 200)
 TUNABLE(fut_mult, 90, 50, 150)
 TUNABLE(see_depth, 6, 3, 9)
-TUNABLE(see_quiet, 60, 30, 100)
+TUNABLE(see_quiet, 55, 30, 100)
 TUNABLE(see_noisy, 25, 10, 50)
 TUNABLE(lmr_base, 70, 30, 110)    // x100
 TUNABLE(lmr_div, 230, 150, 320)   // x100
 TUNABLE(lmr_hist_div, 16384, 8192, 32768)
-TUNABLE(asp_delta, 20, 10, 40)
+TUNABLE(asp_delta, 17, 10, 40)
 
 #undef TUNABLE
 
