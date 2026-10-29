@@ -74,6 +74,10 @@ interval from match statistics only), from 600-game matches at 10+0.1 (one threa
 | Halogen 16 (3625) | 20.8% | −233 [−259, −209] | 3392 |
 | Koivisto 9.0 (3560) | 28.9% | −156 [−180, −134] | 3404 |
 
+With four threads for both engines (network v11 and the SPSA-tuned constants, 600 games per opponent at 10+0.1,
+2026-10-29) the rating is **3404 ± 16**: Halogen 16 21.2% (−228 [−252, −206], implied 3397), Koivisto 9.0 29.9%
+(−148 [−171, −126], implied 3412).
+
 Network v8 scored 3355 and 3331 against the same opponents (2026-10-26). The anchors are CCRL 40/15 4-CPU entries
 (list of 2026-10-16) while both engines played on one thread at 10+0.1.
 
