@@ -1,9 +1,12 @@
 name: datagen
-run-name: datagen ${{ inputs.run_tag }}
+run-name: datagen ${{ github.event_name == 'schedule' && format('sched-{0}', github.run_number) || inputs.run_tag }}
 
 # Self-play training data: every shard runs one `tsurugi datagen` process per core and uploads the
 # positions ("fen | white-view cp | result") as a gzipped artifact.
+# Scheduled runs (every 6 hours) use main, network v11, 20k nodes, 8 shards and seeds offset by the run number.
 on:
+  schedule:
+    - cron: "0 */6 * * *"
   workflow_dispatch:
     inputs:
       run_tag: {description: "unique name of this run", required: true}
@@ -16,6 +19,16 @@ on:
       seed_offset: {description: "added to every seed so runs never repeat games", default: "0"}
       net: {description: "network placed next to the binary (empty for the hand-crafted eval)", default: "nets/tsurugi-v11.nnue"}
 
+env:
+  TAG: ${{ github.event_name == 'schedule' && format('sched-{0}', github.run_number) || inputs.run_tag }}
+  REF: ${{ github.event_name == 'schedule' && 'main' || inputs.ref }}
+  GAMES: ${{ github.event_name == 'schedule' && '100000' || inputs.games }}
+  NODES: ${{ github.event_name == 'schedule' && '20000' || inputs.nodes }}
+  MODE: ${{ github.event_name != 'schedule' && inputs.mode || '' }}
+  HOURS: ${{ github.event_name == 'schedule' && '5' || inputs.hours }}
+  SEED_OFFSET: ${{ github.event_name == 'schedule' && 'auto' || inputs.seed_offset }}
+  NET: ${{ github.event_name == 'schedule' && 'nets/tsurugi-v11.nnue' || inputs.net }}
+
 jobs:
   generate:
     runs-on: ubuntu-latest
@@ -24,30 +37,33 @@ jobs:
       fail-fast: false
       max-parallel: 8
       matrix:
-        shard: ${{ fromJSON(inputs.shards) }}
+        shard: ${{ fromJSON(github.event_name == 'schedule' && '[1,2,3,4,5,6,7,8]' || inputs.shards) }}
     steps:
       - uses: actions/checkout@v4
-        with: {ref: "${{ inputs.ref }}"}
+        with: {ref: "${{ env.REF }}"}
       - name: Build
         run: |
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DTSURUGI_NATIVE=ON -DTSURUGI_USE_PEXT=OFF -DTSURUGI_DEFAULT_NET= > /dev/null
           cmake --build build -j"$(nproc)" --target tsurugi > /dev/null
-          if [ -n "${{ inputs.net }}" ]; then cp "${{ inputs.net }}" build/tsurugi.nnue; fi
+          if [ -n "$NET" ]; then cp "$NET" build/tsurugi.nnue; fi
+          if [ "$SEED_OFFSET" = auto ]; then SEED_OFFSET=$(( 10000000 + GITHUB_RUN_NUMBER * 1000 )); fi
+          echo "SEED_OFFSET=$SEED_OFFSET" >> "$GITHUB_ENV"
+          echo "tag $TAG ref $REF games $GAMES nodes $NODES hours $HOURS seed_offset $SEED_OFFSET net $NET"
       - name: Generate
         run: |
           n=$(nproc)
           for i in $(seq 0 $((n - 1))); do
-            seed=$(( ${{ inputs.seed_offset }} + ${{ matrix.shard }} * 64 + i ))
-            timeout "${{ inputs.hours }}h" ./build/tsurugi datagen ${{ inputs.games }} ${{ inputs.nodes }} $seed data_$i.txt ${{ inputs.mode }} \
+            seed=$(( SEED_OFFSET + ${{ matrix.shard }} * 64 + i ))
+            timeout "${HOURS}h" ./build/tsurugi datagen $GAMES $NODES $seed data_$i.txt $MODE \
               2> log_$i.txt &
           done
           wait || true
           tail -n 1 log_*.txt
-          cat data_*.txt | gzip -6 > datagen-${{ inputs.run_tag }}-${{ matrix.shard }}.txt.gz
+          cat data_*.txt | gzip -6 > datagen-$TAG-${{ matrix.shard }}.txt.gz
           ls -l datagen-*.txt.gz
       - uses: actions/upload-artifact@v4
         with:
-          name: "datagen-${{ inputs.run_tag }}-${{ matrix.shard }}"
-          path: "datagen-${{ inputs.run_tag }}-${{ matrix.shard }}.txt.gz"
+          name: "datagen-${{ env.TAG }}-${{ matrix.shard }}"
+          path: "datagen-${{ env.TAG }}-${{ matrix.shard }}.txt.gz"
           compression-level: 0
           retention-days: 14
