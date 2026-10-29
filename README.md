@@ -78,6 +78,20 @@ With four threads for both engines (network v11 and the SPSA-tuned constants, 60
 2026-10-29) the rating is **3404 ± 16**: Halogen 16 21.2% (−228 [−252, −206], implied 3397), Koivisto 9.0 29.9%
 (−148 [−171, −126], implied 3412).
 
+**Thread scaling** (2026-10-29, self-play at 10+0.1, 16 MB hash, 600 games per match, 95% intervals): four threads
+against one gain Tsurugi less than they gain the two reference engines, which is why the four-thread rating above is
+no higher than the one-thread rating with v9.
+
+| Engine | Threads | Score | Elo gain | Normalized Elo |
+|---|---|---|---|---|
+| Tsurugi (v11) | 2 vs 1 | 53.3% | +22.6 [+3.0, +42.3] | +32.1 ± 27.8 |
+| Tsurugi (v11) | 4 vs 1 | 61.3% | +79.5 [+60.8, +98.7] | +121.0 ± 27.8 |
+| Koivisto 9.0 | 4 vs 1 | 64.0% | +100.0 [+80.8, +119.7] | +151.0 ± 27.8 |
+| Halogen 16 | 4 vs 1 | 65.9% | +114.6 [+94.8, +135.1] | +169.9 ± 27.8 |
+
+Tsurugi's four-thread gain is 35.0 ± 27.7 Elo below Halogen's, 20.4 ± 27.2 below Koivisto's (not significant on its
+own) and 27.5 ± 23.6 below the mean of the two.
+
 Network v8 scored 3355 and 3331 against the same opponents (2026-10-26). The anchors are CCRL 40/15 4-CPU entries
 (list of 2026-10-16) while both engines played on one thread at 10+0.1.
 
