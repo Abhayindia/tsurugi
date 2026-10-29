@@ -90,7 +90,10 @@ no higher than the one-thread rating with v9.
 | Halogen 16 | 4 vs 1 | 65.9% | +114.6 [+94.8, +135.1] | +169.9 ± 27.8 |
 
 Tsurugi's four-thread gain is 35.0 ± 27.7 Elo below Halogen's, 20.4 ± 27.2 below Koivisto's (not significant on its
-own) and 27.5 ± 23.6 below the mean of the two.
+own) and 27.5 ± 23.6 below the mean of the two. A larger hash does not explain it: with 64 MB, Tsurugi gains
++87.5 [+69.1, +106.4] and Halogen +108.2 [+88.1, +128.9]; over both hash sizes (1200 games per engine) Tsurugi's gain
+is 27.8 ± 19.5 below Halogen's. The runners have two physical cores with two hardware threads each, so "four
+threads" here is two cores with SMT for every engine.
 
 Network v8 scored 3355 and 3331 against the same opponents (2026-10-26). The anchors are CCRL 40/15 4-CPU entries
 (list of 2026-10-16) while both engines played on one thread at 10+0.1.
