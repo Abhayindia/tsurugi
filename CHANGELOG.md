@@ -66,6 +66,8 @@ All strength figures are SPRT results against the previous version (fastchess, U
 - Quiet-move history indexed also by whether the from- and to-squares are attacked +10.2 ± 5.0 (6400 games, 8+0.08).
 - Captures ordered by capture history, with the good/bad capture SEE threshold scaled by that history +6.2 ± 3.5 (12800 games, 8+0.08).
 - Time budget scaled by the network's uncertainty about the root position (active only with a network that has an uncertainty head) +4.8 ± 3.3 (12800 games, 8+0.08).
+- SPSA-tuned search constants (8 parallel 5-hour chains, moves summed; the 4 with |t| ≥ 2 applied: aspiration delta
+  17, reverse futility margin 67, null-move eval divisor 178, quiet SEE threshold 55) +3.74 ± 2.52 (22400 games, 8+0.08).
 
 ### Engine
 - Refresh cache ("Finny table") for king-bucket networks: a king that changes its input bucket rebuilds its
