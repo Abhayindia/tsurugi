@@ -78,7 +78,8 @@ interval from match statistics only), from 600-game matches at 10+0.1 (one threa
 
 With four threads for both engines (network v11 and the SPSA-tuned constants, 600 games per opponent at 10+0.1,
 2026-10-29) the rating is **3404 ± 16**: Halogen 16 21.2% (−228 [−252, −206], implied 3397), Koivisto 9.0 29.9%
-(−148 [−171, −126], implied 3412).
+(−148 [−171, −126], implied 3412). With network v12 (same setup, 2026-10-30) it is **3412 ± 16**: Halogen 16 22.4%
+(−216 [−239, −194], implied 3409), Koivisto 9.0 30.3% (−145 [−168, −124], implied 3415).
 
 **Thread scaling** (2026-10-29, self-play at 10+0.1, 16 MB hash, 600 games per match, 95% intervals): four threads
 against one gain Tsurugi less than they gain the two reference engines, which is why the four-thread rating above is
