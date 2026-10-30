@@ -59,14 +59,14 @@ jobs:
           unzip -q book.zip
       - name: Play
         run: |
-          opts() { for o in $1; do printf ' option.%s' "$o"; done; }
+          opts() { for o in $1; do printf ' option.%s' "$o"; done; echo "$1" | grep -q 'Hash=' || printf ' option.Hash=16'; }
           seed=$(( ${{ inputs.seed_offset }} + ${{ matrix.shard }} ))
           # One core per search thread: an engine with Threads=N gets N cores to itself.
           threads=$(echo "${{ inputs.new_opts }} ${{ inputs.base_opts }}" | grep -o 'Threads=[0-9]*' | cut -d= -f2 | sort -n | tail -n 1)
           conc=$(( $(nproc) / ${threads:-1} )); [ "$conc" -ge 1 ] || conc=1
           ./fastchess/fastchess \
-            -engine cmd=new/build/tsurugi name=new $(opts "${{ inputs.new_opts }}") option.Hash=16 \
-            -engine cmd=base/build/tsurugi name=base $(opts "${{ inputs.base_opts }}") option.Hash=16 \
+            -engine cmd=new/build/tsurugi name=new $(opts "${{ inputs.new_opts }}") \
+            -engine cmd=base/build/tsurugi name=base $(opts "${{ inputs.base_opts }}") \
             -each tc=${{ inputs.tc }} proto=uci \
             -openings file=UHO_Lichess_4852_v1.epd format=epd order=random -srand $seed \
             -repeat -games 2 -rounds ${{ inputs.pairs }} -concurrency "$conc" -recover \
