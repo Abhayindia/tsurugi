@@ -40,7 +40,8 @@ the previous version; the full record is in [docs/elo_history.md](docs/elo_histo
 **Evaluation**
 - NNUE: 768 → 2×1536 → 1 network with 8 output buckets by piece count, squared clipped-ReLU (SCReLU)
   activations, int16 quantisation and lazily updated accumulators, trained with Tsurugi's own PyTorch and JAX
-  trainers ([scripts/nnue](scripts/nnue)); network v11 is trained on 482,739,856 positions
+  trainers ([scripts/nnue](scripts/nnue)); network v12 is trained on 561,719,334 positions with a heteroscedastic
+  (beta-NLL) loss
 - A hand-crafted tapered evaluation (material, piece-square tables, mobility, king safety, rook files) is used when
   no network is loaded
 
