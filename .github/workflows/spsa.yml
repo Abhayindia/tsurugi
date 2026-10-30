@@ -13,7 +13,7 @@ on:
       tc: {description: "time control", default: "5+0.05"}
       shards: {description: "JSON array of shard numbers", default: "[1,2,3,4,5,6,7,8]"}
       seed_offset: {description: "added to the shard number to seed each chain", default: "0"}
-      net: {description: "network in the repo placed next to the binary", default: "nets/tsurugi-v11.nnue"}
+      net: {description: "network in the repo placed next to the binary", default: "nets/tsurugi-v12.nnue"}
       start: {description: "JSON object of starting values (empty: the engine's defaults)", default: ""}
 
 jobs:

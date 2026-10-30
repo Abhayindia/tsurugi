@@ -15,7 +15,7 @@ on:
       pairs: {description: "game pairs per shard", default: "100"}
       shards: {description: "JSON array of shard numbers", default: "[1,2,3,4,5,6,7,8]"}
       seed_offset: {description: "added to the shard number to seed the opening order", default: "0"}
-      net: {description: "network in the repo placed next to both binaries (empty for none)", default: "nets/tsurugi-v11.nnue"}
+      net: {description: "network in the repo placed next to both binaries (empty for none)", default: "nets/tsurugi-v12.nnue"}
       new_net: {description: "network for the new engine only (empty: same as net)", default: ""}
 
 jobs:

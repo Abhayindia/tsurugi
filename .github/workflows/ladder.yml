@@ -13,7 +13,7 @@ on:
       pairs: {description: "game pairs per shard", default: "100"}
       tc: {description: "time control", default: "10+0.1"}
       seed_offset: {description: "added to the shard number to seed the opening order", default: "0"}
-      net: {description: "network in the repo placed next to the binary", default: "nets/tsurugi-v11.nnue"}
+      net: {description: "network in the repo placed next to the binary", default: "nets/tsurugi-v12.nnue"}
       threads: {description: "threads of the first engine; games run nproc / (larger thread count) at a time", default: "1"}
       opp_threads: {description: "threads of the opponent (empty: same as threads)", default: ""}
       first: {description: "first engine: tsurugi, or the opponent's name to play it against itself", default: "tsurugi"}

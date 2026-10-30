@@ -10,7 +10,7 @@ on:
       depth: {description: "bench depth", default: "14"}
       threads: {description: "space-separated thread counts", default: "1 2 4"}
       reps: {description: "repetitions per thread count (interleaved)", default: "5"}
-      net: {description: "network in the repo placed next to the binary", default: "nets/tsurugi-v11.nnue"}
+      net: {description: "network in the repo placed next to the binary", default: "nets/tsurugi-v12.nnue"}
 
 jobs:
   bench:

@@ -31,7 +31,11 @@ All strength figures are SPRT results against the previous version (fastchess, U
 - Network v10: v9's evaluation unchanged plus an uncertainty head fitted on 1M Lichess positions
   (held-out correlation 0.524), which activates the uncertainty-scaled time budget. +5.5 ± 3.7 over v9
   (9600 games, 8+0.08).
-- Network v11 is the default: v9's data and recipe with SCReLU activations (482,739,856 positions, 20 epochs,
+- Network v12 is the default: v11's architecture trained with the heteroscedastic (beta-NLL, beta 0.5) loss on
+  561,719,334 positions (self-play sets sp2-sp12 and kc1 plus 250M Lichess positions, 20 epochs, Kaggle TPU).
+  +12.93 ± 7.21 over v11 (3200 games, 8+0.08). The variance head is used only in training; the network file has no
+  uncertainty head.
+- Network v11: v9's data and recipe with SCReLU activations (482,739,856 positions, 20 epochs,
   trained on a Kaggle TPU). +13.6 ± 7.1 over v10 (3200 games, 8+0.08). It has no uncertainty head, so the
   uncertainty-scaled time budget is inactive with it. In a controlled A/B (two networks trained on the same 196,824,993
   positions with the same recipe) SCReLU gave +4.9 ± 3.8 over clipped ReLU (12800 games, 8+0.08).

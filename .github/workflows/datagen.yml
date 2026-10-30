@@ -3,7 +3,7 @@ run-name: datagen ${{ github.event_name == 'schedule' && format('sched-{0}', git
 
 # Self-play training data: every shard runs one `tsurugi datagen` process per core and uploads the
 # positions ("fen | white-view cp | result") as a gzipped artifact.
-# Scheduled runs (every 6 hours) use main, network v11, 20k nodes, 8 shards and seeds offset by the run number.
+# Scheduled runs (every 6 hours) use main, network v12, 20k nodes, 8 shards and seeds offset by the run number.
 on:
   schedule:
     - cron: "0 */6 * * *"
@@ -17,7 +17,7 @@ on:
       hours: {description: "stop each process after this many hours", default: "5"}
       shards: {description: "JSON array of shard numbers", default: "[1,2,3,4,5,6,7,8]"}
       seed_offset: {description: "added to every seed so runs never repeat games", default: "0"}
-      net: {description: "network placed next to the binary (empty for the hand-crafted eval)", default: "nets/tsurugi-v11.nnue"}
+      net: {description: "network placed next to the binary (empty for the hand-crafted eval)", default: "nets/tsurugi-v12.nnue"}
 
 env:
   TAG: ${{ github.event_name == 'schedule' && format('sched-{0}', github.run_number) || inputs.run_tag }}
@@ -27,7 +27,7 @@ env:
   MODE: ${{ github.event_name != 'schedule' && inputs.mode || '' }}
   HOURS: ${{ github.event_name == 'schedule' && '5' || inputs.hours }}
   SEED_OFFSET: ${{ github.event_name == 'schedule' && 'auto' || inputs.seed_offset }}
-  NET: ${{ github.event_name == 'schedule' && 'nets/tsurugi-v11.nnue' || inputs.net }}
+  NET: ${{ github.event_name == 'schedule' && 'nets/tsurugi-v12.nnue' || inputs.net }}
 
 jobs:
   generate:
