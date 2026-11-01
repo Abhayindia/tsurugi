@@ -12,6 +12,7 @@ downloaded by `tools/setup_testing.sh` and are not committed.
 | Perft node counts | Move generator verification | https://www.chessprogramming.org/Perft_Results | Reference values |
 | python-chess | Independent perft reference | https://github.com/niklasf/python-chess | GPL-3.0 |
 | Lichess evaluations (`lichess_db_eval.jsonl.zst`, 416,442,401 positions, 22.4 GB) | NNUE training labels (Stockfish evaluations at varying depth, mostly 20-40, computed in users' browsers) | https://database.lichess.org/#evals | CC0 |
+| Leela Chess Zero training data in bullet format (`test77nov-unfilt-test79-maraprmay-v6-dd.skip-see-ge0.wdl-pdist.iter-1.bullet.bin.zst`, first 50M positions with \|score\| < 2000) | NNUE training positions with scores and game results (network v13) | https://huggingface.co/datasets/linrock/bullet-training-data (derived from Leela Chess Zero self-play data, https://lczero.org) | ODbL 1.0 |
 | Lichess puzzles (`lichess_db_puzzle.csv.zst`, 6,157,341 puzzles) | Tactics benchmark: solve rate by puzzle rating | https://database.lichess.org/#puzzles | CC0 |
 | Lichess broadcast games (`lichess_db_broadcast_2026-04..09.pgn.zst`) | Over-the-board games of titled players: move-agreement benchmark | https://database.lichess.org/#broadcasts | CC0 |
 

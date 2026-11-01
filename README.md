@@ -61,6 +61,7 @@ the previous version; the full record is in [docs/elo_history.md](docs/elo_histo
 | Network v10 (v9 + uncertainty head) over v9 (8+0.08) | +5.5 ± 3.7 |
 | Network v11 (v9's data with SCReLU) over v10 (8+0.08) | +13.6 ± 7.1 |
 | Network v12 (heteroscedastic loss, more self-play) over v11 (8+0.08) | +12.93 ± 7.21 |
+| Network v13 (v12 fine-tuned on new self-play and Lc0 data) over v12 (8+0.08) | +12.6 ± 7.45 |
 | Late move reductions | +144.8 ± 27.7 |
 | Null-move pruning | +137.6 ± 28.1 |
 | Aspiration windows | +78.3 ± 21.7 |
