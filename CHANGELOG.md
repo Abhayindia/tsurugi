@@ -34,7 +34,9 @@ All strength figures are SPRT results against the previous version (fastchess, U
 - Network v13 is the default: v12 fine-tuned (6 epochs, learning rate 1e-4, Kaggle GPU) on 261,450,362 positions
   it had never seen: self-play sets sp13-sp15, sched20-22, kc2 and kc3 (20k-node searches by v11/v12) plus 50M
   positions of public Leela Chess Zero training data (|score| < 2000). +12.6 ± 7.45 over v12 (3200 games, 8+0.08).
-  Fine-tuning is measured as a whole: the gain mixes the new data with the extra training steps.
+  A control network (v12 with the same fine-tune on 261,450,362 positions it had already seen) lost
+  -7.49 ± 6.81 to v12 and v13 beat it by +19.78 ± 7.29 (3200 games each), so the gain comes from the new data, not
+  the extra training.
 - Network v12: v11's architecture trained with the heteroscedastic (beta-NLL, beta 0.5) loss on
   561,719,334 positions (self-play sets sp2-sp12 and kc1 plus 250M Lichess positions, 20 epochs, Kaggle TPU).
   +12.93 ± 7.21 over v11 (3200 games, 8+0.08). The variance head is used only in training; the network file has no
