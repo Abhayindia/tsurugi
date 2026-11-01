@@ -112,6 +112,21 @@ def export(p, path, hidden, buckets, layout=0, screlu=False):
         fh.write(struct.pack(f"<{len(out_b)}i", *out_b))
 
 
+def load_net(path, hidden, buckets, layout=0):
+    """Float parameters of an exported network (the inverse of export, factoriser already merged)."""
+    raw = Path(path).read_bytes()
+    head = 4 + 4 * (5 if raw[4] == 5 else 4 if raw[4] == 4 else 2 if raw[4] == 1 else 3)
+    pad = 768 * KING_BUCKETS[layout]
+    sizes = [pad * hidden, hidden, buckets * 2 * hidden]
+    ft_w, ft_b, out_w = np.split(np.frombuffer(raw, np.int16, sum(sizes), head), np.cumsum(sizes)[:2])
+    out_b = np.frombuffer(raw, np.int32, buckets, head + 2 * sum(sizes))
+    assert head + 2 * sum(sizes) + 4 * buckets == len(raw), "network shape does not match --hidden/--buckets/--king-layout"
+    ft_w = np.vstack([ft_w.reshape(pad, hidden) / QA, np.zeros((1, hidden))])
+    return {"ft_w": jnp.asarray(ft_w, jnp.float32), "ft_b": jnp.asarray(ft_b / QA, jnp.float32),
+            "out_w": jnp.asarray(out_w.reshape(buckets, 2 * hidden) / QB, jnp.float32),
+            "out_b": jnp.asarray(out_b / (QA * QB), jnp.float32)}
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--data", required=True)
@@ -129,6 +144,7 @@ def main():
     ap.add_argument("--wdl", type=float, default=0.0)
     ap.add_argument("--hetero", type=float, default=None, metavar="BETA",
                     help="train a log-variance head jointly with the value under the beta-NLL loss (not exported)")
+    ap.add_argument("--init", help="start from this exported network instead of random weights (fine-tuning)")
     a = ap.parse_args()
 
     devices = jax.devices()
@@ -150,7 +166,10 @@ def main():
     sched = optax.piecewise_constant_schedule(
         a.lr, {steps_per_epoch * max(1, a.epochs // 3) * i: 0.3 for i in range(1, 4)})
     opt = optax.adam(sched)
-    params = init(jax.random.PRNGKey(1), a.hidden, a.buckets, a.king_layout, a.factorize)
+    if a.init:
+        params = load_net(a.init, a.hidden, a.buckets, a.king_layout)
+    else:
+        params = init(jax.random.PRNGKey(1), a.hidden, a.buckets, a.king_layout, a.factorize)
     if a.hetero is not None:
         # Log-variance head on the (gradient-stopped) hidden layer, started at the targets' variance.
         params["var_w"] = jnp.zeros((a.buckets, 2 * a.hidden))
@@ -221,7 +240,7 @@ def main():
         export(jax.device_get({k: v for k, v in params.items() if not k.startswith("var_")}), a.out, a.hidden, a.buckets, a.king_layout, a.screlu)
 
     Path(a.out).with_suffix(".json").write_text(json.dumps(
-        {"data": a.data, "positions": len(c), "hidden": a.hidden, "buckets": a.buckets, "king_layout": a.king_layout, "factorize": a.factorize, "screlu": a.screlu, "hetero": a.hetero, "epochs": a.epochs,
+        {"data": a.data, "positions": len(c), "hidden": a.hidden, "buckets": a.buckets, "king_layout": a.king_layout, "factorize": a.factorize, "screlu": a.screlu, "hetero": a.hetero, "init": a.init, "epochs": a.epochs,
          "batch": batch, "lr": a.lr, "wdl": a.wdl, "trainer": "jax", "devices": len(devices),
          "scale": SCALE, "qa": QA, "qb": QB, "history": history}, indent=1))
 
