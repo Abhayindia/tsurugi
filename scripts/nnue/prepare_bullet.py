@@ -79,6 +79,7 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--shard", type=int, default=1_000_000)
     ap.add_argument("--limit", type=int, default=0, help="stop after this many kept positions (0 = all)")
+    ap.add_argument("--skip", type=int, default=0, help="discard the first this many kept positions")
     ap.add_argument("--max-cp", type=int, default=0, help="drop positions with |score| >= this (0 = keep all)")
     ap.add_argument("--jobs", type=int, default=1)
     ap.add_argument("file")
@@ -86,7 +87,7 @@ def main():
     out = Path(a.out).expanduser()
     out.mkdir(parents=True, exist_ok=True)
 
-    kept = bad = shard_no = 0
+    kept = bad = shard_no = skipped = 0
     pool = None
     if a.jobs > 1:
         from multiprocessing import Pool
@@ -104,6 +105,10 @@ def main():
 
     for feats, cp, result, nbad in batches():
         bad += nbad
+        if skipped < a.skip:
+            k = min(len(cp), a.skip - skipped)
+            skipped += k
+            feats, cp, result = feats[k:], cp[k:], result[k:]
         if a.limit:
             k = min(len(cp), a.limit - kept)
             feats, cp, result = feats[:k], cp[:k], result[:k]
@@ -118,7 +123,7 @@ def main():
     if pool:
         pool.terminate()
     (out / "meta.json").write_text(json.dumps({"source": [a.file], "kept": kept, "bad": bad, "shards": shard_no,
-                                               "max_cp": a.max_cp}, indent=1))
+                                               "max_cp": a.max_cp, "skip": skipped}, indent=1))
     print(f"done: {kept} positions, {bad} dropped (invalid or |cp| >= max-cp)")
 
 
