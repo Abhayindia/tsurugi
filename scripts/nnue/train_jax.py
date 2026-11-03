@@ -127,6 +127,25 @@ def load_net(path, hidden, buckets, layout=0):
             "out_b": jnp.asarray(out_b / (QA * QB), jnp.float32)}
 
 
+def net_layout(path):
+    """King layout stored in an exported network's header (versions 4 and 5 carry one; older ones have none)."""
+    raw = Path(path).read_bytes()
+    return struct.unpack_from("<I", raw, 16)[0] if raw[4] in (4, 5) else 0
+
+
+def add_king_buckets(p, layout, factorize):
+    """Start a king-bucket network from one without king buckets. King-bucket layouts mirror a side's view of the board
+    while its king is on files e-h, so every bucket starts from the mirrored original weights: the original network
+    exactly while both kings are on e-h (as at the start of the game), an approximation otherwise."""
+    w = p["ft_w"]
+    n = KING_BUCKETS[layout]
+    mirrored = w[:768][(np.arange(768) // 64) * 64 + (np.arange(768) % 64 ^ 7)]
+    if factorize:
+        # The mirrored weights become the shared factoriser and the per-bucket weights start at zero.
+        return {**p, "fact": jnp.vstack([mirrored, w[768:]]), "ft_w": jnp.zeros((768 * n + 1, w.shape[1]))}
+    return {**p, "ft_w": jnp.vstack([jnp.tile(mirrored, (n, 1)), w[768:]])}
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--data", required=True)
@@ -167,7 +186,11 @@ def main():
         a.lr, {steps_per_epoch * max(1, a.epochs // 3) * i: 0.3 for i in range(1, 4)})
     opt = optax.adam(sched)
     if a.init:
-        params = load_net(a.init, a.hidden, a.buckets, a.king_layout)
+        src = net_layout(a.init)
+        params = load_net(a.init, a.hidden, a.buckets, src)
+        if src != a.king_layout:
+            assert src == 0, "--init can only add king buckets to a network without them"
+            params = add_king_buckets(params, a.king_layout, a.factorize)
     else:
         params = init(jax.random.PRNGKey(1), a.hidden, a.buckets, a.king_layout, a.factorize)
     if a.hetero is not None:
