@@ -11,6 +11,7 @@ on:
       threads: {description: "space-separated thread counts", default: "1 2 4"}
       reps: {description: "repetitions per thread count (interleaved)", default: "5"}
       net: {description: "network in the repo placed next to the binary", default: "nets/tsurugi-v13.nnue"}
+      compare: {description: "also measure nps scaling of Tsurugi, Koivisto 9.0 and Halogen 16 on one runner", default: "false"}
 
 jobs:
   bench:
@@ -39,3 +40,55 @@ jobs:
           done
       - uses: actions/upload-artifact@v4
         with: {name: "smp-${{ inputs.run_tag }}", path: smp.txt, retention-days: 30}
+
+  # Nodes per second at each thread count for Tsurugi and the ladder opponents, interleaved on the same runner, so the
+  # per-thread speed loss can be compared between engines (the runner's SMT caps all of them alike).
+  nps:
+    if: inputs.compare == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with: {ref: "${{ inputs.ref }}"}
+      - name: Build and fetch engines
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DTSURUGI_NATIVE=ON -DTSURUGI_USE_PEXT=OFF > /dev/null
+          cmake --build build -j"$(nproc)" --target tsurugi > /dev/null
+          net="${{ inputs.net }}"
+          if [ -n "$net" ] && [ -f "$net" ]; then cp "$net" build/tsurugi.nnue; fi
+          curl -sL -o koivisto https://github.com/Luecx/Koivisto/releases/download/v9.0/Koivisto_9.0-linux-avx2-pgo
+          curl -sL -o halogen https://github.com/KierenP/Halogen/releases/download/v16/Halogen-16.0.0-linux-x86_64-avx2
+          chmod +x koivisto halogen
+          lscpu | grep -E "Model name|Thread\(s\) per core|Core\(s\) per socket|Socket\(s\)"
+      - name: Measure
+        run: |
+          fens=("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+                "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1"
+                "r1bq1rk1/pp2bppp/2n1pn2/3p4/2PP4/2N1PN2/PP3PPP/R2QKB1R w KQ - 0 8"
+                "8/5pk1/6p1/3R4/7P/6P1/r4PK1/8 w - - 0 40")
+          for r in $(seq ${{ inputs.reps }}); do
+            for e in ./build/tsurugi ./koivisto ./halogen; do
+              for t in ${{ inputs.threads }}; do
+                for i in "${!fens[@]}"; do
+                  nps=$( (printf "uci\nsetoption name Hash value 64\nsetoption name Threads value %s\nisready\nucinewgame\nposition fen %s\ngo movetime 2000\n" "$t" "${fens[$i]}"; sleep 2.6; printf "quit\n") \
+                        | $e | grep -o " nps [0-9]*" | tail -1 | awk '{print $2}')
+                  echo "engine $(basename $e) threads $t rep $r pos $i nps $nps" | tee -a nps.txt
+                done
+              done
+            done
+          done
+          python3 - <<'EOF'
+          import collections, statistics
+          v = collections.defaultdict(list)
+          for line in open("nps.txt"):
+              f = line.split()
+              if len(f) == 10 and f[9].isdigit():
+                  v[(f[1], int(f[3]), f[7])].append(int(f[9]))
+          for e in ("tsurugi", "koivisto", "halogen"):
+              base = {p: statistics.median(x) for (ee, t, p), x in v.items() if ee == e and t == 1}
+              for t in sorted({t for (ee, t, p) in v if ee == e}):
+                  r = [statistics.median(x) / base[p] for (ee, tt, p), x in v.items() if ee == e and tt == t and p in base]
+                  print(f"{e} threads {t}: nps ratio vs 1 thread {statistics.mean(r):.3f} (mean of {len(r)} positions)")
+          EOF
+      - uses: actions/upload-artifact@v4
+        with: {name: "nps-${{ inputs.run_tag }}", path: nps.txt, retention-days: 30}
