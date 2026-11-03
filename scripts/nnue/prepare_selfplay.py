@@ -32,10 +32,19 @@ def parse(line):
     return feats, 0 if fields[1] == "w" else 1, int(cp), RESULTS[result]
 
 
+def scale_cp(cp, scale):
+    """Scores times `scale`, rounded; mate-range scores (|cp| >= 10000) are left as they are."""
+    if scale == 1.0:
+        return cp.astype(np.int16)
+    return np.where(np.abs(cp) < 10000, np.rint(cp * scale), cp).astype(np.int16)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", required=True)
     ap.add_argument("--shard", type=int, default=1_000_000)
+    ap.add_argument("--cp-scale", type=float, default=1.0,
+                    help="multiply scores below 10000 by this (to put labels from different networks on one scale)")
     ap.add_argument("files", nargs="+")
     a = ap.parse_args()
     out = Path(a.out).expanduser()
@@ -49,7 +58,7 @@ def main():
             return
         f, s, c, r = zip(*buf)
         np.savez(out / f"shard_{shard_no:04d}.npz", features=np.stack(f), stm=np.array(s, dtype=np.int8),
-                 cp=np.array(c, dtype=np.int16), result=np.array(r, dtype=np.int8))
+                 cp=scale_cp(np.array(c), a.cp_scale), result=np.array(r, dtype=np.int8))
         print(f"shard {shard_no}: {len(buf)} positions", flush=True)
         buf, shard_no = [], shard_no + 1
 
@@ -65,8 +74,8 @@ def main():
                 if len(buf) == a.shard:
                     flush()
     flush()
-    (out / "meta.json").write_text(json.dumps({"source": a.files, "kept": kept, "bad": bad, "shards": shard_no},
-                                              indent=1))
+    (out / "meta.json").write_text(json.dumps({"source": a.files, "kept": kept, "bad": bad, "shards": shard_no,
+                                               "cp_scale": a.cp_scale}, indent=1))
     print(f"done: {kept} positions, {bad} bad lines")
 
 

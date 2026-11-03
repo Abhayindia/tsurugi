@@ -80,6 +80,8 @@ def main():
     ap.add_argument("--shard", type=int, default=1_000_000)
     ap.add_argument("--limit", type=int, default=0, help="stop after this many kept positions (0 = all)")
     ap.add_argument("--skip", type=int, default=0, help="discard the first this many kept positions")
+    ap.add_argument("--cp-scale", type=float, default=1.0,
+                    help="multiply kept scores by this after the --max-cp filter (to match another source's scale)")
     ap.add_argument("--max-cp", type=int, default=0, help="drop positions with |score| >= this (0 = keep all)")
     ap.add_argument("--jobs", type=int, default=1)
     ap.add_argument("file")
@@ -113,6 +115,8 @@ def main():
             k = min(len(cp), a.limit - kept)
             feats, cp, result = feats[:k], cp[:k], result[:k]
         if len(cp):
+            if a.cp_scale != 1.0:
+                cp = np.rint(cp * a.cp_scale).astype(np.int16)
             np.savez(out / f"shard_{shard_no:04d}.npz", features=feats, stm=np.zeros(len(cp), dtype=np.int8),
                      cp=cp, result=result)
             print(f"shard {shard_no}: {len(cp)} positions", flush=True)
@@ -123,7 +127,7 @@ def main():
     if pool:
         pool.terminate()
     (out / "meta.json").write_text(json.dumps({"source": [a.file], "kept": kept, "bad": bad, "shards": shard_no,
-                                               "max_cp": a.max_cp, "skip": skipped}, indent=1))
+                                               "max_cp": a.max_cp, "skip": skipped, "cp_scale": a.cp_scale}, indent=1))
     print(f"done: {kept} positions, {bad} dropped (invalid or |cp| >= max-cp)")
 
 
