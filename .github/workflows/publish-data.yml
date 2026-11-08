@@ -1,0 +1,51 @@
+name: publish-data
+run-name: publish-data ${{ inputs.release }}
+
+# Copy self-play artifacts of finished datagen runs into a release, so training jobs elsewhere can download
+# them after the 14-day artifact retention. manifest.tsv lists file, run tag, run id and the network that
+# labelled the positions.
+on:
+  workflow_dispatch:
+    inputs:
+      release: {description: "release tag", default: "selfplay-c3"}
+      runs: {description: "space-separated datagen run ids", required: true}
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      REL: ${{ inputs.release }}
+      RUNS: ${{ inputs.runs }}
+    steps:
+      - name: Create the release
+        run: |
+          gh release view "$REL" > /dev/null 2>&1 || gh release create "$REL" --prerelease --target main \
+            --title "Self-play training data ($REL)" \
+            --notes "Tsurugi self-play positions, one line per position: FEN | White-view score in cp | White-view result (1.0/0.5/0.0). manifest.tsv names the network that labelled each file."
+      - name: Copy artifacts
+        run: |
+          have=$(gh release view "$REL" --json assets --jq '.assets[].name')
+          printf 'file\ttag\trun\tnet\n' > manifest.tsv
+          for id in $RUNS; do
+            tag=$(gh run view "$id" --json displayTitle --jq .displayTitle | sed 's/^datagen //')
+            net=$(gh run view "$id" --log 2>/dev/null | grep -m1 -o 'seed_offset [0-9]* net [^ ]*' | awk '{print $4}' || true)
+            for a in $(gh api "repos/$GH_REPO/actions/runs/$id/artifacts?per_page=100" --jq '.artifacts[]|select(.expired==false)|.name'); do
+              f=$a.txt.gz
+              printf '%s\t%s\t%s\t%s\n' "$f" "$tag" "$id" "${net:-unknown}" >> manifest.tsv
+              if grep -qx "$f" <<< "$have"; then continue; fi
+              gh run download "$id" -n "$a" -D dl
+              gzip -t "dl/$f"
+              gh release upload "$REL" "dl/$f"
+              rm -f "dl/$f"
+              echo "$tag $f"
+            done
+          done
+          gh release upload "$REL" manifest.tsv --clobber
+          cut -f2,4 manifest.tsv | sort | uniq -c
