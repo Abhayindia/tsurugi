@@ -3,7 +3,7 @@ run-name: datagen ${{ github.event_name == 'schedule' && format('sched-{0}', git
 
 # Self-play training data: every shard runs one `tsurugi datagen` process per core and uploads the
 # positions ("fen | white-view cp | result") as a gzipped artifact.
-# Scheduled runs (every 6 hours) use main, network v13, 20k nodes, 8 shards and seeds offset by the run number.
+# Scheduled runs (every 6 hours) use main, network v13, 60k nodes, 8 shards and seeds offset by the run number.
 on:
   schedule:
     - cron: "0 */6 * * *"
@@ -23,7 +23,7 @@ env:
   TAG: ${{ github.event_name == 'schedule' && format('sched-{0}', github.run_number) || inputs.run_tag }}
   REF: ${{ github.event_name == 'schedule' && 'main' || inputs.ref }}
   GAMES: ${{ github.event_name == 'schedule' && '100000' || inputs.games }}
-  NODES: ${{ github.event_name == 'schedule' && '20000' || inputs.nodes }}
+  NODES: ${{ github.event_name == 'schedule' && '60000' || inputs.nodes }}
   MODE: ${{ github.event_name != 'schedule' && inputs.mode || '' }}
   HOURS: ${{ github.event_name == 'schedule' && '5' || inputs.hours }}
   SEED_OFFSET: ${{ github.event_name == 'schedule' && 'auto' || inputs.seed_offset }}
