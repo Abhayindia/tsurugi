@@ -388,10 +388,11 @@ Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int p
     bool improving = !in_check && ply >= 2 && stack_[ply - 2].static_eval != VALUE_NONE &&
                      eval > stack_[ply - 2].static_eval;
     stack_[ply + 1].killers[0] = stack_[ply + 1].killers[1] = NO_MOVE;
+    stack_[ply + 2].cutoffs = 0;
 
     if (!pv && !in_check && excluded == NO_MOVE) {
         if (Features.rfp && depth <= tune::rfp_depth && eval - tune::rfp_margin * (depth - improving) >= beta && eval < VALUE_MATE_IN_MAX_PLY)
-            return eval;
+            return Features.rfp_blend ? Value((eval + beta) / 2) : eval;
 
         if (Features.razoring && depth <= tune::razor_depth && eval + tune::razor_base + tune::razor_mult * depth <= alpha) {
             Value v = qsearch(pos, alpha, alpha + 1, ply);
@@ -399,7 +400,8 @@ Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int p
         }
 
         if (Features.null_move && depth >= 3 && eval >= beta && pos.has_non_pawn_material(pos.side_to_move()) &&
-            ply > 0 && stack_[ply - 1].current != NO_MOVE && (!Features.cut_node || cut)) {
+            ply > 0 && stack_[ply - 1].current != NO_MOVE && (!Features.cut_node || cut) &&
+            !(Features.null_tt && tt_hit && tte.bound() == BOUND_UPPER && tt_value < beta)) {
             int r = tune::nmp_base + depth / tune::nmp_depth_div + std::min((eval - beta) / tune::nmp_eval_div, 3);
             stack_[ply].current = NO_MOVE;
             stack_[ply].moved = NO_PIECE;
@@ -536,6 +538,16 @@ Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int p
                     r -= quiet_score(~pos.side_to_move(), m, stack_[ply].moved, ply) / tune::lmr_hist_div;
                 else
                     r -= history_[~pos.side_to_move()][from_sq(m)][to_sq(m)] / 8192;
+                if (Features.tt_capt_lmr && tt_move != NO_MOVE && is_capture(tt_move)) ++r;
+                if (Features.cutoff_cnt && stack_[ply + 1].cutoffs > 2) ++r;
+                r = std::clamp(r, 0, std::max(new_depth - 1, 0));
+            } else if (Features.capt_lmr && depth >= 3 && !quiet && legal > (pv ? 3 : 2)) {
+                // Late captures are reduced too, one ply less than a quiet move would be.
+                r = lmr_table[std::min(depth, MAX_PLY - 1)][std::min(legal, 63)] - 1;
+                r += !pv;
+                r -= gives_check;
+                if (Features.cut_node) r += cut;
+                r -= tt_pv && !pv;
                 r = std::clamp(r, 0, std::max(new_depth - 1, 0));
             }
             v = -negamax(pos, -alpha - 1, -alpha, new_depth - r, ply + 1, true);
@@ -564,6 +576,7 @@ Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int p
                 for (int k = ply + 1; k < pv_len_[ply + 1]; ++k) pv_[ply][k] = pv_[ply + 1][k];
                 pv_len_[ply] = std::max(pv_len_[ply + 1], ply + 1);
                 if (v >= beta) {
+                    ++stack_[ply].cutoffs;
                     if (quiet) update_quiet_stats(pos, m, quiets, nq, depth, ply);
                     if (Features.capt_hist_see) update_capture_stats(pos, is_capture(m) ? m : NO_MOVE, captures, nc, depth);
                     break;

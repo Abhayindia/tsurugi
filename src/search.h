@@ -45,6 +45,11 @@ struct SearchFeatures {
     bool unc_tm = true;
     bool threat_history = true;
     bool capt_hist_see = true;
+    bool capt_lmr = false;
+    bool tt_capt_lmr = false;
+    bool rfp_blend = false;
+    bool null_tt = false;
+    bool cutoff_cnt = false;
 };
 
 extern SearchFeatures Features;
@@ -77,6 +82,7 @@ private:
         Move excluded;
         int double_ext;  // double extensions already made on the path to this node
         U64 threats;     // squares the opponent attacks at this node
+        int cutoffs;     // beta cutoffs among this node's moves so far
     };
 
     Value negamax(Position& pos, Value alpha, Value beta, int depth, int ply, bool cut);

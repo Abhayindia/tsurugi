@@ -42,6 +42,8 @@ const Toggle TOGGLES[] = {
     {"SingularV2", &Features.singular_v2},   {"TTPV", &Features.tt_pv},
     {"UncTM", &Features.unc_tm},             {"ThreatHistory", &Features.threat_history},
     {"CaptHistSEE", &Features.capt_hist_see},
+    {"CaptLMR", &Features.capt_lmr}, {"TTCaptLMR", &Features.tt_capt_lmr},
+    {"RFPBlend", &Features.rfp_blend}, {"NullTT", &Features.null_tt}, {"CutoffCnt", &Features.cutoff_cnt},
     {"EvalMobility", &EvalTerms.mobility},   {"EvalPassedPawns2", &EvalTerms.passed_pawns2},
     {"EvalKingSafety", &EvalTerms.king_safety},
     {"EvalRookFiles", &EvalTerms.rook_files},
