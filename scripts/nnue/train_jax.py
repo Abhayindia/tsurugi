@@ -5,7 +5,7 @@ Usage: python scripts/nnue/train_jax.py --data <dir[,dir:N...]> --out net.nnue [
 The batch is split across all local devices (data parallel); weights are exported after every epoch.
 With --chunks N the data directories are read in N random groups per epoch, so the set may be larger than memory; the
 last directory is then the validation set. --state saves parameters and optimiser after every epoch and resumes from
-that file when it exists; --stop-after ends this run early so a later run can carry on.
+that file when it exists; --stop-after or --deadline end this run early so a later run can carry on.
 """
 import argparse
 import json
@@ -173,6 +173,8 @@ def main():
                     help="read the data directories in this many groups per epoch; the last directory is the validation set")
     ap.add_argument("--state", help="save the training state here after every epoch and resume from it if it exists")
     ap.add_argument("--stop-after", type=int, default=0, help="stop after this many epochs of this run (0 = no limit)")
+    ap.add_argument("--deadline", type=float, default=0,
+                    help="unix time; no epoch is started that would not finish by then, judged by the slowest one so far")
     a = ap.parse_args()
 
     devices = jax.devices()
@@ -291,6 +293,10 @@ def main():
 
     for epoch in range(first, a.epochs):
         if a.stop_after and epoch - first >= a.stop_after:
+            break
+        slowest = max([h["seconds"] for h in history[first:]], default=0)
+        if a.deadline and epoch > first and time.time() + 1.15 * slowest > a.deadline:
+            print(f"stopping before epoch {epoch + 1}: it would not finish by the deadline", flush=True)
             break
         t0 = time.time()
         losses = []
