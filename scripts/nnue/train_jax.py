@@ -218,9 +218,15 @@ def main():
             yield f, s, target, train_idx
             return
         order = np.random.default_rng(100 + epoch)
-        for g in np.array_split(order.permutation(train_dirs), a.chunks):
+        for n, g in enumerate(np.array_split(order.permutation(train_dirs), a.chunks)):
+            t = time.time()
             gf, gs, gc, gr = load(",".join(g), 0)
-            yield gf, gs, targets(gc, gr), order.permutation(len(gc))
+            gt, k = targets(gc, gr), len(gc)
+            del gc, gr
+            print(f"epoch {epoch + 1} group {n + 1}/{a.chunks}: {k} positions loaded in {time.time() - t:.0f} s", flush=True)
+            yield gf, gs, gt, order.permutation(k)
+            # Drop this group before the next one is read, so only one is ever in memory.
+            del gf, gs, gt
     sched = optax.piecewise_constant_schedule(
         a.lr, {steps_per_epoch * max(1, a.epochs // 3) * i: 0.3 for i in range(1, 4)})
     opt = optax.adam(sched)
