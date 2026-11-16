@@ -1,11 +1,16 @@
 """Train Tsurugi's NNUE with JAX, for TPUs (Kaggle TPU VMs); same model, data, targets and file format as train.py.
 
 Usage: python scripts/nnue/train_jax.py --data <dir[,dir:N...]> --out net.nnue [--hidden 1536] [--buckets 8]
-       [--epochs 15] [--wdl 0.25] [--hetero 0.5]
+       [--epochs 15] [--wdl 0.25] [--hetero 0.5] [--chunks 5] [--state run.pkl] [--stop-after 7]
 The batch is split across all local devices (data parallel); weights are exported after every epoch.
+With --chunks N the data directories are read in N random groups per epoch, so the set may be larger than memory; the
+last directory is then the validation set. --state saves parameters and optimiser after every epoch and resumes from
+that file when it exists; --stop-after ends this run early so a later run can carry on.
 """
 import argparse
 import json
+import os
+import pickle
 import struct
 import sys
 import time
@@ -164,6 +169,10 @@ def main():
     ap.add_argument("--hetero", type=float, default=None, metavar="BETA",
                     help="train a log-variance head jointly with the value under the beta-NLL loss (not exported)")
     ap.add_argument("--init", help="start from this exported network instead of random weights (fine-tuning)")
+    ap.add_argument("--chunks", type=int, default=1,
+                    help="read the data directories in this many groups per epoch; the last directory is the validation set")
+    ap.add_argument("--state", help="save the training state here after every epoch and resume from it if it exists")
+    ap.add_argument("--stop-after", type=int, default=0, help="stop after this many epochs of this run (0 = no limit)")
     a = ap.parse_args()
 
     devices = jax.devices()
@@ -172,16 +181,44 @@ def main():
     batch = a.batch - a.batch % len(devices)
     print(f"training on {len(devices)} x {devices[0].platform}", flush=True)
 
-    f, s, c, r = load(a.data, a.limit)
-    score = 1.0 / (1.0 + np.exp(-c / SCALE))
-    target = np.where(r < 0, score, (1 - a.wdl) * score + a.wdl * r).astype(np.float32)
-    rng = np.random.default_rng(1)
-    perm = rng.permutation(len(c))
-    n_val = int(len(c) * a.val)
-    val_idx, train_idx = perm[:n_val], perm[n_val:]
-    print(f"{len(train_idx)} training / {n_val} validation positions", flush=True)
+    def targets(c, r):
+        score = 1.0 / (1.0 + np.exp(-c / SCALE))
+        return np.where(r < 0, score, (1 - a.wdl) * score + a.wdl * r).astype(np.float32)
 
-    steps_per_epoch = len(train_idx) // batch
+    rng = np.random.default_rng(1)
+    if a.chunks > 1:
+        dirs = a.data.split(",")
+        train_dirs = dirs[:-1]
+        f, s, c, r = load(dirs[-1], 0)
+        target = targets(c, r)
+        val_idx = np.arange(len(c))
+        val = (f, s, target)
+        n_train = sum(json.loads((Path(d).expanduser() / "meta.json").read_text())["kept"] for d in train_dirs)
+        positions, train_var = n_train + len(c), float(np.var(target))
+        print(f"{n_train} training positions in {len(train_dirs)} directories, {a.chunks} groups per epoch / "
+              f"{len(c)} validation positions", flush=True)
+        steps_per_epoch = n_train // batch
+    else:
+        f, s, c, r = load(a.data, a.limit)
+        target = targets(c, r)
+        perm = rng.permutation(len(c))
+        n_val = int(len(c) * a.val)
+        val_idx, train_idx = perm[:n_val], perm[n_val:]
+        val = (f, s, target)
+        positions, train_var = len(c), float(np.var(target[train_idx]))
+        print(f"{len(train_idx)} training / {n_val} validation positions", flush=True)
+        steps_per_epoch = len(train_idx) // batch
+
+    def groups(epoch):
+        """The epoch's training data as (features, stm, target, shuffled index) one group at a time."""
+        if a.chunks <= 1:
+            rng.shuffle(train_idx)
+            yield f, s, target, train_idx
+            return
+        order = np.random.default_rng(100 + epoch)
+        for g in np.array_split(order.permutation(train_dirs), a.chunks):
+            gf, gs, gc, gr = load(",".join(g), 0)
+            yield gf, gs, targets(gc, gr), order.permutation(len(gc))
     sched = optax.piecewise_constant_schedule(
         a.lr, {steps_per_epoch * max(1, a.epochs // 3) * i: 0.3 for i in range(1, 4)})
     opt = optax.adam(sched)
@@ -196,10 +233,16 @@ def main():
     if a.hetero is not None:
         # Log-variance head on the (gradient-stopped) hidden layer, started at the targets' variance.
         params["var_w"] = jnp.zeros((a.buckets, 2 * a.hidden))
-        params["var_b"] = jnp.full((a.buckets,), float(np.log(np.var(target[train_idx]))))
+        params["var_b"] = jnp.full((a.buckets,), float(np.log(train_var)))
     params = jax.device_put(params, repl)
     pad = 768 * KING_BUCKETS[a.king_layout]
     opt_state = jax.device_put(opt.init(params), repl)
+    history, first = [], 0
+    if a.state and os.path.exists(a.state):
+        saved = pickle.load(open(a.state, "rb"))
+        params, opt_state = jax.device_put(saved["params"], repl), jax.device_put(saved["opt_state"], repl)
+        history, first = saved["history"], saved["epoch"]
+        print(f"resumed after epoch {first} from {a.state}", flush=True)
 
     def residual(p, feats, stm, tgt):
         out, x, k = forward(p, feats, stm, a.buckets, a.king_layout, a.screlu, with_hidden=True)
@@ -241,29 +284,36 @@ def main():
         p = {**p, "out_w": jnp.clip(p["out_w"], -WEIGHT_CLIP, WEIGHT_CLIP)}
         return p, st, loss
 
-    def put(idx):
-        return (jax.device_put(f[idx], shard), jax.device_put(s[idx].astype(np.int32), shard),
-                jax.device_put(target[idx], shard))
+    def put(d, idx):
+        idx = np.sort(idx)
+        return (jax.device_put(d[0][idx], shard), jax.device_put(d[1][idx].astype(np.int32), shard),
+                jax.device_put(d[2][idx], shard))
 
-    history = []
-    for epoch in range(a.epochs):
+    for epoch in range(first, a.epochs):
+        if a.stop_after and epoch - first >= a.stop_after:
+            break
         t0 = time.time()
-        rng.shuffle(train_idx)
         losses = []
-        for i in range(steps_per_epoch):
-            params, opt_state, loss = step(params, opt_state, *put(train_idx[i * batch:(i + 1) * batch]))
-            losses.append(loss)
+        for gf, gs, gt, idx in groups(epoch):
+            for i in range(len(idx) // batch):
+                params, opt_state, loss = step(params, opt_state, *put((gf, gs, gt), idx[i * batch:(i + 1) * batch]))
+                losses.append(loss)
+            del gf, gs, gt, idx
         vb = [val_idx[i:i + batch] for i in range(0, len(val_idx) - batch + 1, batch)] or [val_idx]
-        stats = np.mean([[float(x) for x in eval_stats(params, *put(v))] for v in vb], axis=0)
+        stats = np.mean([[float(x) for x in eval_stats(params, *put(val, v))] for v in vb], axis=0)
         history.append({"epoch": epoch + 1, "train_loss": float(jnp.mean(jnp.stack(losses))), "val_loss": stats[0],
                         "seconds": round(time.time() - t0)})
         if a.hetero is not None:
             history[-1].update(val_nll=stats[1], val_sigma_corr=stats[2])
         print(json.dumps(history[-1]), flush=True)
         export(jax.device_get({k: v for k, v in params.items() if not k.startswith("var_")}), a.out, a.hidden, a.buckets, a.king_layout, a.screlu)
+        if a.state:
+            pickle.dump({"params": jax.device_get(params), "opt_state": jax.device_get(opt_state), "history": history,
+                         "epoch": epoch + 1}, open(a.state + ".tmp", "wb"))
+            os.replace(a.state + ".tmp", a.state)
 
     Path(a.out).with_suffix(".json").write_text(json.dumps(
-        {"data": a.data, "positions": len(c), "hidden": a.hidden, "buckets": a.buckets, "king_layout": a.king_layout, "factorize": a.factorize, "screlu": a.screlu, "hetero": a.hetero, "init": a.init, "epochs": a.epochs,
+        {"data": a.data, "positions": positions, "chunks": a.chunks, "hidden": a.hidden, "buckets": a.buckets, "king_layout": a.king_layout, "factorize": a.factorize, "screlu": a.screlu, "hetero": a.hetero, "init": a.init, "epochs": a.epochs,
          "batch": batch, "lr": a.lr, "wdl": a.wdl, "trainer": "jax", "devices": len(devices),
          "scale": SCALE, "qa": QA, "qb": QB, "history": history}, indent=1))
 
