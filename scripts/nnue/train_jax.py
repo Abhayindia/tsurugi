@@ -305,15 +305,16 @@ def main():
             print(f"stopping before epoch {epoch + 1}: it would not finish by the deadline", flush=True)
             break
         t0 = time.time()
-        losses = []
+        # A running sum: stacking one loss per step is a single op with tens of thousands of inputs on large sets.
+        loss_sum, steps = jnp.float32(0.0), 0
         for gf, gs, gt, idx in groups(epoch):
             for i in range(len(idx) // batch):
                 params, opt_state, loss = step(params, opt_state, *put((gf, gs, gt), idx[i * batch:(i + 1) * batch]))
-                losses.append(loss)
+                loss_sum, steps = loss_sum + loss, steps + 1
             del gf, gs, gt, idx
         vb = [val_idx[i:i + batch] for i in range(0, len(val_idx) - batch + 1, batch)] or [val_idx]
         stats = np.mean([[float(x) for x in eval_stats(params, *put(val, v))] for v in vb], axis=0)
-        history.append({"epoch": epoch + 1, "train_loss": float(jnp.mean(jnp.stack(losses))), "val_loss": stats[0],
+        history.append({"epoch": epoch + 1, "train_loss": float(loss_sum) / max(steps, 1), "val_loss": stats[0],
                         "seconds": round(time.time() - t0)})
         if a.hetero is not None:
             history[-1].update(val_nll=stats[1], val_sigma_corr=stats[2])
