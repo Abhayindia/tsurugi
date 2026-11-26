@@ -8,7 +8,7 @@ on:
     inputs:
       run_tag: {description: "unique name of this run", required: true}
       ref: {description: "commit of the engine", required: true}
-      opponents: {description: "JSON array of opponents (weiss, laser, koivisto, halogen)", default: "[\"weiss\",\"laser\",\"koivisto\",\"halogen\"]"}
+      opponents: {description: "JSON array of opponents (weiss, laser, koivisto, halogen, stockfish19)", default: "[\"weiss\",\"laser\",\"koivisto\",\"halogen\"]"}
       shards: {description: "JSON array of shard numbers per opponent", default: "[1,2]"}
       pairs: {description: "game pairs per shard", default: "100"}
       tc: {description: "time control", default: "10+0.1"}
@@ -56,6 +56,12 @@ jobs:
             halogen)
               curl -sL -o opponent https://github.com/KierenP/Halogen/releases/download/v16/Halogen-16.0.0-linux-x86_64-avx2
               chmod +x opponent ;;
+            stockfish19)
+              binary=stockfish-linux-x86-64-universal
+              curl -fsSL --retry 3 -o sf.tar.gz "https://github.com/official-stockfish/Stockfish/releases/download/sf_19/$binary.tar.gz"
+              echo '9defc0d4e55d49c65a6d042f3e571a39fcea499ade6dbe741b53b8c65e03611f  sf.tar.gz' | sha256sum -c -
+              tar -xzf sf.tar.gz "stockfish/$binary"
+              mv "stockfish/$binary" opponent ;;
             tsurugi)
               ln -s engine/build/tsurugi opponent ;;
             *) echo "unknown opponent"; exit 1 ;;
@@ -96,13 +102,18 @@ jobs:
             -each tc=${{ inputs.tc }} proto=uci \
             -openings file=UHO_Lichess_4852_v1.epd format=epd order=random -srand $seed \
             -repeat -games 2 -rounds ${{ inputs.pairs }} -concurrency "$conc" -recover \
-            -ratinginterval 1000000 > games.log 2>&1 || true
+            -pgnout file=games.pgn -ratinginterval 1000000 > games.log 2>&1 || { tail -20 games.log; exit 1; }
           tail -20 games.log
           { echo "opponent ${{ matrix.opponent }}"
             echo "pairing $an vs $bn"
             grep -E "^Games: " games.log | tail -1
             echo "timeouts $(grep -ciE 'loses on time' games.log || true)"; } > result.txt
           cat result.txt
-          grep -q "^Games: " result.txt
+          grep -q "^Games: $((2 * ${{ inputs.pairs }}))," result.txt
       - uses: actions/upload-artifact@v4
-        with: {name: "ladder-${{ matrix.opponent }}-${{ matrix.shard }}", path: result.txt, retention-days: 30}
+        with:
+          name: ladder-${{ matrix.opponent }}-${{ matrix.shard }}
+          path: |
+            result.txt
+            games.pgn
+          retention-days: 30
