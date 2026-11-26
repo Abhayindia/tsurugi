@@ -103,6 +103,10 @@ threads" here is two cores with SMT for every engine.
 Network v8 scored 3355 and 3331 against the same opponents (2026-10-26). The anchors are CCRL 40/15 4-CPU entries
 (list of 2026-10-16) while both engines played on one thread at 10+0.1.
 
+Against full-strength Stockfish 19, Tsurugi v13 scored **14.5/96 (15.1%)** with 0 wins, 29 draws and 67 losses.
+Both engines used one thread, 16 MB of hash and a 10+0.1 clock. Each of the 48 UHO opening pairs used reversed
+colors. Neither engine lost on time. [Match logs and PGNs](https://github.com/Abhayindia/tsurugi/actions/runs/45859229417)
+
 Earlier, on Stockfish's `UCI_Elo` scale (1200 games at 10+0.1 against Stockfish 17.1 limited to 2850, 3000 and
 3190): 3174 ± 18 with network v7, 3157 ± 19 with v6, 3123 ± 18 with v5, 3066 ± 18 with v4, 3030 ± 19 with v3 and
 2941 ± 19 with v2.
