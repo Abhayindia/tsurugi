@@ -276,7 +276,7 @@ Value Searcher::qsearch(Position& pos, Value alpha, Value beta, int ply) {
     if (out_of_time()) return 0;
     seldepth_ = std::max(seldepth_, ply);
     if (ply >= MAX_PLY - 1) return evaluate(pos);
-    if (pos.is_draw()) return VALUE_DRAW;
+    if (pos.is_draw(DrawContext::Search)) return VALUE_DRAW;
 
     bool pv = beta - alpha > 1;
     TTEntry tte;
@@ -358,7 +358,7 @@ Value Searcher::negamax(Position& pos, Value alpha, Value beta, int depth, int p
     seldepth_ = std::max(seldepth_, ply);
 
     if (!root) {
-        if (pos.is_draw()) return VALUE_DRAW;
+        if (pos.is_draw(DrawContext::Search)) return VALUE_DRAW;
         if (ply >= MAX_PLY - 1) return evaluate(pos);
         alpha = std::max(alpha, -VALUE_MATE + ply);
         beta = std::min(beta, VALUE_MATE - ply - 1);

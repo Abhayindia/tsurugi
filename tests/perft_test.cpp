@@ -39,6 +39,30 @@ const std::vector<Case> CASES = {
      {46, 2079, 89890, 3894594, 164075551, 6923051137ULL}, 6, 4},
 };
 
+bool check_draw_rules() {
+    Position pos;
+    pos.set_fen(CASES.front().fen);
+    for (int occurrence = 2; occurrence <= 3; ++occurrence) {
+        for (const char* uci : {"g1f3", "g8f6", "f3g1", "f6g8"}) {
+            Move m = pos.parse_move(uci);
+            if (m == NO_MOVE) return false;
+            pos.make_move(m);
+        }
+        if (pos.is_draw(DrawContext::Game) != (occurrence == 3) || !pos.is_draw(DrawContext::Search))
+            return false;
+    }
+    // Null moves restore the same board and turn but start a fresh repetition history.
+    pos.make_null();
+    pos.make_null();
+    if (pos.is_draw(DrawContext::Game) || pos.is_draw(DrawContext::Search)) return false;
+    pos.unmake_null();
+    pos.unmake_null();
+    if (!pos.is_draw(DrawContext::Game)) return false;
+
+    pos.set_fen("7k/6Q1/6K1/8/8/8/8/8 b - - 100 51");
+    return !pos.is_draw(DrawContext::Game) && !pos.is_draw(DrawContext::Search);
+}
+
 // Walks the tree checking incremental key == recomputed key and that unmake restores the FEN.
 bool check_consistency(Position& pos, int depth) {
     if (pos.key() != pos.compute_key()) {
@@ -115,6 +139,10 @@ int main(int argc, char** argv) {
     }
 
     int failures = 0;
+    if (!check_draw_rules()) {
+        std::cout << "draw rules FAILED\n";
+        ++failures;
+    }
     std::uint64_t total_nodes = 0;
     auto t0 = std::chrono::steady_clock::now();
 

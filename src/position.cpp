@@ -415,7 +415,7 @@ void Position::unmake_null() {
     states_.pop_back();
 }
 
-bool Position::is_draw() const {
+bool Position::is_draw(DrawContext context) const {
     const StateInfo& st = states_.back();
     if (st.rule50 >= 100) {
         if (!st.checkers) return true;
@@ -425,8 +425,10 @@ bool Position::is_draw() const {
     }
     int end = std::min(st.rule50, st.plies_from_null);
     int n = int(states_.size()) - 1;
+    // Self-play claims threefold repetition. Search cuts cycles on the first repeat.
+    int needed = context == DrawContext::Game ? 2 : 1;
     for (int i = 4; i <= end && n - i >= 0; i += 2)
-        if (states_[n - i].key == st.key) return true;
+        if (states_[n - i].key == st.key && --needed == 0) return true;
 
     U64 minors = pieces(KNIGHT) | pieces(BISHOP);
     return !(pieces(PAWN) | pieces(ROOK) | pieces(QUEEN)) && popcount(minors) <= 1;

@@ -26,6 +26,8 @@ struct StateInfo {
     Piece captured;
 };
 
+enum class DrawContext { Game, Search };
+
 class Position {
 public:
     static void init();
@@ -63,8 +65,7 @@ public:
     void make_null();
     void unmake_null();
 
-    bool is_draw() const;
-    // True if a single reversible move reaches a position seen within the search since the last irreversible move.
+    bool is_draw(DrawContext context) const;
     U64 compute_key() const;
     // True while a network is loaded and UseNNUE is on; accumulators are only maintained then.
     static inline bool nnue_enabled = false;

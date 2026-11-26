@@ -42,12 +42,12 @@ bool random_opening(Position& pos, std::mt19937_64& rng) {
     for (int i = 0; i < plies; ++i) {
         MoveList list;
         generate_legal(pos, list);
-        if (list.size == 0) return false;
+        if (list.size == 0 || pos.is_draw(DrawContext::Game)) return false;
         pos.make_move(list.moves[rng() % list.size]);
     }
     MoveList list;
     generate_legal(pos, list);
-    return list.size > 0 && !pos.is_draw();
+    return list.size > 0 && !pos.is_draw(DrawContext::Game);
 }
 
 const char* result_string(double r) { return r == 1.0 ? "1.0" : r == 0.0 ? "0.0" : "0.5"; }
@@ -91,7 +91,7 @@ void datagen(int games, std::uint64_t nodes, std::uint64_t seed, const std::stri
                 result = pos.in_check() ? (pos.side_to_move() == WHITE ? 0.0 : 1.0) : 0.5;
                 break;
             }
-            if (pos.is_draw() || ply >= MAX_GAME_PLIES) break;
+            if (pos.is_draw(DrawContext::Game) || ply >= MAX_GAME_PLIES) break;
 
             searcher->clear_stop();
             SearchLimits move_limits = limits;
